@@ -1,4 +1,5 @@
-from __future__ import print_function
+#!/usr/bin/env python3
+# coding: utf-8
 
 """
 simulatedtempering.py: Implements simulated tempering
@@ -34,7 +35,6 @@ __author__ = "Peter Eastman"
 __version__ = "1.0"
 
 import openmm.unit as unit
-import math
 import random
 from sys import stdout
 import pandas as pd

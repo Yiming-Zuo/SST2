@@ -14,7 +14,7 @@ import openmm.app as app
 
 import pdb_numpy
 
-import SST2.setup as setup
+import SST2.tools as tools
 import SST2.rest2 as rest2
 
 
@@ -44,8 +44,8 @@ def test_peptide_protein_complex(tmp_path):
     temperature = 300 * unit.kelvin
     friction = 1 / unit.picoseconds
 
-    # Set system
 
+    # Set system
     pdb = app.PDBFile(PDB_PROT_PEP_SOL)
     integrator = openmm.LangevinMiddleIntegrator(temperature, friction, dt)
     system = forcefield.createSystem(
@@ -54,10 +54,11 @@ def test_peptide_protein_complex(tmp_path):
         nonbondedCutoff=1 * unit.nanometers,
         constraints=app.HBonds,
     )
-    simulation = setup.setup_simulation(system, pdb.positions, pdb.topology, integrator)
+    simulation = tools.setup_simulation(system, pdb.positions, pdb.topology, integrator)
 
     print("System Forces:")
-    forces_sys = rest2.print_forces(system, simulation)
+    tools.print_forces(system, simulation)
+    forces_sys = tools.get_forces(system, simulation)
 
     assert 1339.07153 == pytest.approx(
         forces_sys[0]["energy"].value_in_unit(unit.kilojoule_per_mole), tolerance
@@ -87,12 +88,13 @@ def test_peptide_protein_complex(tmp_path):
         nonbondedCutoff=1 * unit.nanometers,
         constraints=app.HBonds,
     )
-    simulation_pep = setup.setup_simulation(
+    simulation_pep = tools.setup_simulation(
         system_pep, pdb_pep.positions, pdb_pep.topology, integrator_pep
     )
 
     print("Solute Forces:")
-    forces_solute = rest2.print_forces(system_pep, simulation_pep)
+    tools.print_forces(system_pep, simulation_pep)
+    forces_solute = tools.get_forces(system_pep, simulation_pep)
 
     assert 55.969520 == pytest.approx(
         forces_solute[0]["energy"].value_in_unit(unit.kilojoule_per_mole), tolerance
@@ -124,12 +126,13 @@ def test_peptide_protein_complex(tmp_path):
         constraints=app.HBonds,
     )
 
-    simulation_no_pep = setup.setup_simulation(
+    simulation_no_pep = tools.setup_simulation(
         system_no_pep, pdb_no_pep.positions, pdb_no_pep.topology, integrator_no_pep
     )
 
     print("Solvent Forces:")
-    forces_solvent = rest2.print_forces(system_no_pep, simulation_no_pep)
+    tools.print_forces(system_no_pep, simulation_no_pep)
+    forces_solvent = tools.get_forces(system_no_pep, simulation_no_pep)
 
     assert 1283.102050 == pytest.approx(
         forces_solvent[0]["energy"].value_in_unit(unit.kilojoule_per_mole), tolerance
@@ -164,7 +167,8 @@ def test_peptide_protein_complex(tmp_path):
     test = rest2.REST2(system, pdb, forcefield, solute_indices, integrator_rest)
 
     print("REST2 forces 300K:")
-    forces_rest2 = rest2.print_forces(test.system, test.simulation)
+    tools.print_forces(test.system, test.simulation)
+    forces_rest2 = tools.get_forces(test.system, test.simulation)
 
     (
         E_solute_scaled,

@@ -1,21 +1,21 @@
-import copy
-import math
+#!/usr/bin/env python3
+# coding: utf-8
+
+
 from io import StringIO
+import numpy as np
 import sys
-
-from openmm.app import PDBFile, ForceField, HBonds, Simulation, PME
-
-from openmm import (
-    LangevinMiddleIntegrator,
-    MonteCarloBarostat,
-    Platform,
-    unit,
-    openmm,
-)
-
+import logging
 import pdb_numpy.format
 
-from .setup import setup_simulation, create_system_simulation
+import openmm
+from openmm import unit
+import openmm.app as app
+
+from .tools import setup_simulation, create_system_simulation, get_forces
+
+# Logging
+logger = logging.getLogger(__name__)
 
 """
 To fix:
@@ -27,6 +27,18 @@ To fix:
 
 
 class Rest2Reporter(object):
+    """Reporter for REST2 simulation
+    
+    Parameters
+    ----------
+    file : string
+        The file to write to
+    reportInterval : int
+        The interval (in time steps) at which to write frames
+    rest2 : REST2
+        The REST2 object to generate the report
+    
+    """
     def __init__(self, file, reportInterval, rest2):
         self._out = open(file, "w", buffering=1)
         self._out.write(
@@ -43,6 +55,20 @@ class Rest2Reporter(object):
         return (steps, False, False, False, False, None)
 
     def report(self, simulation, state):
+        """Generate a report.
+        Compute the energies of the solute and solvent and write them to the
+        file (`self._out`).
+        
+        Parameters
+        ----------
+        state : State
+            The current state of the simulation
+        
+        Returns
+        -------
+        None
+                
+        """
 
         energies = self._rest2.compute_all_energies()
 
@@ -55,6 +81,61 @@ class Rest2Reporter(object):
 
 
 class REST2:
+    """REST2 class
+
+    Attributes
+    ----------
+    system : System
+        The system to simulate
+    simulation : Simulation
+        The simulation object
+    positions : coordinates
+        The coordinates of the system
+    topology : Topology
+        The topology of the system
+    solute_index : list
+        The list of the solute index
+    solvent_index : list
+        The list of the solvent index
+    system_forces : dict
+        The dict of the system forces
+    scale : float
+        The scaling factor or lambda, default is 1.0
+    
+    init_nb_param : list
+        The list of the initial nonbonded parameters (charge, sigma, epsilon)
+    init_nb_exept_index : list
+        The list of the exception indexes
+    init_nb_exept_value : list
+        The list of the initial nonbonded exception parameters
+        (atom1, atom2, chargeProd, sigma, epsilon)
+    
+    solute_torsion_force : CustomTorsionForce
+        The torsion force of the solute
+    init_torsions_index : list
+        The list of the torsion indexes
+    init_torsions_value : list
+        The list of the initial torsion parameters
+    
+    system_solute : Solute System
+        The solute system
+    simulation_solute : Solute Simulation
+        The solute simulation
+    system_forces_solute : Solute Forces
+        The solute forces
+    
+    system_solvent : Solvent System]
+        The solvent system
+    simulation_solvent : Solvent Simulation
+        The solvent simulation
+    system_forces_solvent : Solvent Forces
+        The solvent forces
+    
+    init_nb_exept_solute_value : list
+        The list of the initial nonbonded exception parameters of the solute
+        (iatom, jatom, chargeprod, sigma, epsilon)
+    """
+
     def __init__(
         self,
         system,
@@ -66,16 +147,56 @@ class REST2:
         temperature=300 * unit.kelvin,
         pressure=1.0 * unit.atmospheres,
         barostatInterval=25,
-        precision="single",
         dt=2*unit.femtosecond,
         friction=1/unit.picoseconds,
-        nonbondedMethod=PME,
+        nonbondedMethod=app.PME,
         nonbondedCutoff=1 * unit.nanometers,
-        constraints=HBonds,
+        constraints=app.HBonds,
         rigidWater=True,
         ewaldErrorTolerance=0.0005,
-        hydrogenMass=3.0 * unit.amu,
+        hydrogenMass=1.0 * unit.amu,
     ):
+        """Initialize the REST2 class
+
+        Parameters
+        ----------
+        system : System
+            The system to simulate
+        pdb : PDBFile
+            The pdb file of the system
+        forcefield : ForceField
+            The forcefield of the system
+        solute_index : list
+            The list of the solute index
+        integrator : Integrator
+            The integrator of the system
+        platform_name : str
+            The name of the platform, default is "CUDA"
+        temperature : float
+            The temperature of the system, default is 300 K
+        pressure : float
+            The pressure of the system, default is 1 atm
+        barostatInterval : int
+            The interval of the barostat, default is 25
+        dt : float
+            The timestep of the system, default is 2 fs
+        friction : float
+            The friction of the system, default is 1 ps-1
+        nonbondedMethod : str
+            The nonbonded method of the system, default is PME
+        nonbondedCutoff : float
+            The nonbonded cutoff of the system, default is 1 nm
+        constraints : str
+            The constraints of the system, default is HBonds
+        rigidWater : bool
+            The rigid water of the system, default is True
+        ewaldErrorTolerance : float
+            The Ewald error tolerance of the system, default is 0.0005
+        hydrogenMass : float
+            The hydrogen mass of the system, default is 1 amu
+        
+        
+        """
 
         self.system = system
         self.positions = pdb.positions
@@ -84,6 +205,11 @@ class REST2:
         self.solvent_index = list(
             set(range(self.system.getNumParticles())).difference(set(self.solute_index))
         )
+
+        assert len(self.solute_index) + len(self.solvent_index) == self.system.getNumParticles()
+        assert len(self.solute_index) != 0
+        assert len(self.solvent_index) != 0
+
         self.system_forces = {
             type(force).__name__: force for force in self.system.getForces()
         }
@@ -96,236 +222,79 @@ class REST2:
         # Extract solute torsions index and values
         self.find_torsions()
         # Create separate solute and solvent simulation
-        if self.solvent_index and self.solute_index:
-            self.create_solute_solvent_simulation(
-                forcefield=forcefield,
-                platform_name=platform_name,
-                nonbondedMethod=nonbondedMethod,
-                nonbondedCutoff=nonbondedCutoff,
-                constraints=constraints,
-                rigidWater=rigidWater,
-                ewaldErrorTolerance=ewaldErrorTolerance,
-                hydrogenMass=hydrogenMass,
-                friction=friction,
-                dt=dt,
-            )
-            # Extract solute nonbonded index and values from the solute_only system
-            self.find_nb_solute_system()
-        self.setup_simulation(
-            integrator,
-            temperature=temperature,
-            pressure=pressure,
-            barostatInterval=barostatInterval,
-            platform_name=platform_name,
-            precision=precision,
-        )
-
-    def create_solute_solvent_simulation(
-        self,
-        forcefield,
-        solute_out_pdb="solute.pdb",
-        solvent_out_pdb="solvent.pdb",
-        nonbondedMethod=PME,
-        nonbondedCutoff=1 * unit.nanometers,
-        constraints=HBonds,
-        platform_name="CUDA",
-        rigidWater=True,
-        ewaldErrorTolerance=0.0005,
-        hydrogenMass=3.0 * unit.amu,
-        friction=1/unit.picoseconds,
-        dt=2*unit.femtosecond,
-    ):
-        """Extract solute only and solvent only coordinates.
-        A sytem and a simulation is then created for both systems.
-        """
-
-        # Save pdb coordinates to read them with pdb_numpy
-
-        # Redirect stdout in the variable new_stdout:
-        old_stdout = sys.stdout
-        stdout = new_stdout = StringIO()
-        # In case of dummy atoms (position restraints, ...)
-        # It has to be removed from pdb files
-        top_num_atom = self.topology.getNumAtoms()
-
-        PDBFile.writeFile(self.topology, self.positions[:top_num_atom], stdout, True)
-        sys.stdout = old_stdout
-
-        # Read
-        solute_solvent_coor = pdb_numpy.format.pdb.parse(
-            new_stdout.getvalue().split("\n")
-        )
-
-        # Separate coordinates in two pdb files:
-        solute_coor = solute_solvent_coor.select_index(self.solute_index)
-        solute_coor.write(solute_out_pdb, check_file_out=False)
-
-        solvent_coor = solute_solvent_coor.select_index(self.solvent_index)
-        solvent_coor.write(solvent_out_pdb, check_file_out=False)
-
-        # Create system and simulations:
-        self.system_solute, self.simulation_solute = create_system_simulation(
-            solute_out_pdb,
+        self.create_solute_solvent_simulation(
             forcefield=forcefield,
+            platform_name=platform_name,
             nonbondedMethod=nonbondedMethod,
             nonbondedCutoff=nonbondedCutoff,
             constraints=constraints,
-            platform_name=platform_name,
             rigidWater=rigidWater,
             ewaldErrorTolerance=ewaldErrorTolerance,
             hydrogenMass=hydrogenMass,
             friction=friction,
             dt=dt,
         )
-        self.system_forces_solute = {
-            type(force).__name__: force for force in self.system_solute.getForces()
-        }
-
-        self.system_solvent, self.simulation_solvent = create_system_simulation(
-            solvent_out_pdb,
-            forcefield=forcefield,
-            nonbondedMethod=nonbondedMethod,
-            nonbondedCutoff=nonbondedCutoff,
-            constraints=constraints,
-            platform_name=platform_name,
-            rigidWater=rigidWater,
-            ewaldErrorTolerance=ewaldErrorTolerance,
-            hydrogenMass=hydrogenMass,
-        )
-
-        self.system_forces_solvent = {
-            type(force).__name__: force for force in self.system_solvent.getForces()
-        }
-
-    def setup_simulation(
-        self,
-        integrator,
-        temperature=300 * unit.kelvin,
-        pressure=1.0 * unit.atmospheres,
-        barostatInterval=25,
-        platform_name="CUDA",
-        precision="single",
-    ):
-        """Add the simulation object."""
-
-        # Add PT MonteCarlo barostat
-        self.system.addForce(
-            MonteCarloBarostat(pressure, temperature, barostatInterval)
-        )
-
-        self.simulation = setup_simulation(
-            self.system,
-            self.positions,
-            self.topology,
-            integrator=integrator,
+        # Extract solute nonbonded index and values from the solute_only system
+        self.find_nb_solute_system()
+        self.setup_simulation(
+            integrator,
+            temperature=temperature,
+            pressure=pressure,
+            barostatInterval=barostatInterval,
             platform_name=platform_name,
         )
+    
+    def find_solute_nb_index(self):
+        """Extract initial solute nonbonded indexes and values (charge, sigma, epsilon).
+        Extract also excclusion indexes and values (chargeprod, sigma, epsilon)
 
-    def compute_solute_solvent_system_energy(self):
-        """Update solute only and solvent only systems
-        coordinates and box vector according to the solute-solvent
-        system values.
-        Extract then forces for each systems.
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        None
         """
 
-        sim_state = self.simulation.context.getState(getPositions=True, getEnergy=True)
+        nonbonded_force = self.system_forces["NonbondedForce"]
 
-        tot_positions = sim_state.getPositions(asNumpy=True)
-        box_vector = sim_state.getPeriodicBoxVectors()
+        # Copy particles
+        self.init_nb_param = []
+        for particle_index in range(nonbonded_force.getNumParticles()):
+            [charge, sigma, epsilon] = nonbonded_force.getParticleParameters(
+                particle_index
+            )
+            self.init_nb_param.append([charge, sigma, epsilon])
 
-        self.simulation_solute.context.setPeriodicBoxVectors(*box_vector)
-        self.simulation_solute.context.setPositions(tot_positions[self.solute_index])
+        # Copy solute-solute exclusions
+        self.init_nb_exept_index = []
+        self.init_nb_exept_value = []
 
-        forces_solute = get_forces(self.system_solute, self.simulation_solute)
+        for exception_index in range(nonbonded_force.getNumExceptions()):
+            [
+                iatom,
+                jatom,
+                chargeprod,
+                sigma,
+                epsilon,
+            ] = nonbonded_force.getExceptionParameters(exception_index)
 
-        self.simulation_solvent.context.setPeriodicBoxVectors(*box_vector)
-        self.simulation_solvent.context.setPositions(tot_positions[self.solvent_index])
+            if iatom in self.solute_index and jatom in self.solute_index:
 
-        forces_solvent = get_forces(self.system_solvent, self.simulation_solvent)
-
-        return (forces_solute, forces_solvent)
-
-    def separate_bond_pot(self):
-        """Useless in the REST2 case as solute potential energy
-        is obtain from the solute only system.
-        """
-
-        energy_expression = "(k/2)*(r-length)^2;"
-
-        # Create the Solvent bond
-        solvent_bond_force = openmm.CustomBondForce(energy_expression)
-        solvent_bond_force.addPerBondParameter("length")
-        solvent_bond_force.addPerBondParameter("k")
-
-        # Create the Solute bond
-        solute_bond_force = openmm.CustomBondForce(energy_expression)
-        solute_bond_force.addPerBondParameter("length")
-        solute_bond_force.addPerBondParameter("k")
-
-        original_bond_force = self.system_forces["HarmonicBondForce"]
-
-        for i in range(original_bond_force.getNumBonds()):
-            p1, p2, length, k = original_bond_force.getBondParameters(i)
-            # print(p1, p2)
-
-            if p1 in self.solute_index and p2 in self.solute_index:
-                solute_bond_force.addBond(p1, p2, [length, k])
-            elif p1 not in self.solute_index and p2 not in self.solute_index:
-                solvent_bond_force.addBond(p1, p2, [length, k])
-            else:
-                print("Wrong bond !")
-                exit()
-
-        self.system.addForce(solute_bond_force)
-        self.system.addForce(solvent_bond_force)
-
-    def separate_angle_pot(self):
-        """Useless in the REST2 case as solute potential energy
-        is obtain from the solute only system.
-        """
-
-        energy_expression = "(k/2)*(theta-theta0)^2;"
-
-        # Create the Solvent bond
-        solvent_angle_force = openmm.CustomAngleForce(energy_expression)
-        solvent_angle_force.addPerAngleParameter("theta0")
-        solvent_angle_force.addPerAngleParameter("k")
-
-        # Create the Solute bond
-        solute_angle_force = openmm.CustomAngleForce(energy_expression)
-        solute_angle_force.addPerAngleParameter("theta0")
-        solute_angle_force.addPerAngleParameter("k")
-
-        original_angle_force = self.system_forces["HarmonicAngleForce"]
-
-        for i in range(original_angle_force.getNumAngles()):
-            p1, p2, p3, theta0, k = original_angle_force.getAngleParameters(i)
-            if (
-                p1 in self.solute_index
-                and p2 in self.solute_index
-                and p3 in self.solute_index
-            ):
-                solute_angle_force.addAngle(p1, p2, p3, [theta0, k])
-            elif (
-                p1 not in self.solute_index
-                and p2 not in self.solute_index
-                and p3 not in self.solute_index
-            ):
-                solvent_angle_force.addAngle(p1, p2, p3, [theta0, k])
-            else:
-                print("Wrong Angle !")
-                exit()
-
-        self.system.addForce(solute_angle_force)
-        self.system.addForce(solvent_angle_force)
+                self.init_nb_exept_index.append(exception_index)
+                self.init_nb_exept_value.append(
+                    [iatom, jatom, chargeprod, sigma, epsilon]
+                )
 
     def separate_torsion_pot(self):
         """Use in the REST2 case as it avoid to modify
         twice the torsion terms in the rest2 system and
         in the solute system.
 
-        Torsion potential is separate in two groups, one for
-        the solute (scaled) and one for the solvent and not scaled solute torsion.
+        Torsion potential is separate in two groups:
+        - the solute (scaled one) 
+        - the solvent and not scaled solute torsion.
 
         As improper angles are not supposed to be scaled, here we extract only
         the proper torsion angles.
@@ -334,6 +303,14 @@ class REST2:
         https://github.com/maccallumlab/meld/blob/master/meld/runner/transform/rest2.py
 
         The original torsion potential is deleted.
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        None
         """
 
         energy_expression = "k*(1+cos(period*theta-phase));"
@@ -350,6 +327,7 @@ class REST2:
         solute_scaled_torsion_force.addPerTorsionParameter("phase")
         solute_scaled_torsion_force.addPerTorsionParameter("k")
 
+        # Create the not scaled Solute bond
         solute_not_scaled_torsion_force = openmm.CustomTorsionForce(energy_expression)
         solute_not_scaled_torsion_force.addPerTorsionParameter("period")
         solute_not_scaled_torsion_force.addPerTorsionParameter("phase")
@@ -403,16 +381,16 @@ class REST2:
                     p1, p2, p3, p4, [periodicity, phase, k]
                 )
             else:
-                print("Wrong Torsion !")
-                exit()
+                raise ValueError("Torsion not in solute or solvent")
 
         self.solute_torsion_force = solute_scaled_torsion_force
 
+        logger.info("- Add new Torsion Forces")
         self.system.addForce(solute_scaled_torsion_force)
         self.system.addForce(solute_not_scaled_torsion_force)
         self.system.addForce(solvent_torsion_force)
 
-        print("- Delete original Torsion Forces")
+        logger.info("- Delete original Torsion Forces")
 
         for count, force in enumerate(self.system.getForces()):
             if isinstance(force, openmm.PeriodicTorsionForce):
@@ -425,6 +403,14 @@ class REST2:
 
         To identify proper angles we use a trick from:
         https://github.com/maccallumlab/meld/blob/master/meld/runner/transform/rest2.py
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        None
 
         """
 
@@ -463,61 +449,111 @@ class REST2:
                 self.init_torsions_index.append(i)
                 self.init_torsions_value.append([p1, p2, p3, p4, periodicity, phase, k])
 
-        print(f"Solute torsion number : {len(self.init_torsions_index)}")
+        logger.info(f"Solute torsion number : {len(self.init_torsions_index)}")
 
-    def update_torsions(self, scale):
-        """Scale system solute torsion by a scale factor."""
+    def create_solute_solvent_simulation(
+        self,
+        forcefield,
+        solute_out_pdb="solute.pdb",
+        solvent_out_pdb="solvent.pdb",
+        nonbondedMethod=app.PME,
+        nonbondedCutoff=1 * unit.nanometers,
+        constraints=app.HBonds,
+        platform_name="CUDA",
+        rigidWater=True,
+        ewaldErrorTolerance=0.0005,
+        hydrogenMass=3.0 * unit.amu,
+        friction=1/unit.picoseconds,
+        dt=2*unit.femtosecond,
+    ):
+        """Extract solute only and solvent only coordinates.
+        A sytem and a simulation is then created for both systems.
 
-        torsion_force = self.solute_torsion_force
+        Parameters
+        ----------
+        forcefield : str
+            Forcefield name
+        solute_out_pdb : str
+            Output pdb file name for solute, default is "solute.pdb"
+        solvent_out_pdb : str
+            Output pdb file name for solvent, default is "solvent.pdb"
+        nonbondedMethod : openmm.app.forcefield.ForceField
+            Nonbonded method, default is app.PME
+        nonbondedCutoff : float * unit.nanometers
+            Nonbonded cutoff
+        constraints : openmm.app.forcefield.ForceField
+            Constraints
+        platform_name : str
 
-        for i, index in enumerate(self.init_torsions_index):
-            p1, p2, p3, p4, periodicity, phase, k = self.init_torsions_value[i]
-            torsion_force.setTorsionParameters(
-                index, p1, p2, p3, p4, [periodicity, phase, k * scale]
-            )
-
-        torsion_force.updateParametersInContext(self.simulation.context)
-
-    def find_solute_nb_index(self):
-        """Extract initial solute nonbonded indexes and values (charge, sigma, epsilon).
-        Extract also exeption indexes and values (chargeprod, sigma, epsilon)
         """
 
-        nonbonded_force = self.system_forces["NonbondedForce"]
+        # Save pdb coordinates to read them with pdb_numpy
 
-        # Copy particles
-        self.init_nb_param = []
-        for particle_index in range(nonbonded_force.getNumParticles()):
-            [charge, sigma, epsilon] = nonbonded_force.getParticleParameters(
-                particle_index
-            )
-            self.init_nb_param.append([charge, sigma, epsilon])
+        # Redirect stdout in the variable new_stdout:
+        old_stdout = sys.stdout
+        stdout = new_stdout = StringIO()
+        # In case of dummy atoms (position restraints, ...)
+        # It has to be removed from pdb files
+        top_num_atom = self.topology.getNumAtoms()
 
-        # Copy solute-solute exclusions
-        self.init_nb_exept_index = []
-        self.init_nb_exept_value = []
-        for exception_index in range(nonbonded_force.getNumExceptions()):
-            [
-                iatom,
-                jatom,
-                chargeprod,
-                sigma,
-                epsilon,
-            ] = nonbonded_force.getExceptionParameters(exception_index)
-            if iatom in self.solute_index and jatom in self.solute_index:
-                self.init_nb_exept_index.append(exception_index)
-                self.init_nb_exept_value.append(
-                    [iatom, jatom, chargeprod, sigma, epsilon]
-                )
+        app.PDBFile.writeFile(self.topology, self.positions[:top_num_atom], stdout, True)
+        sys.stdout = old_stdout
+
+        # Read
+        solute_solvent_coor = pdb_numpy.format.pdb.parse(
+            new_stdout.getvalue().split("\n")
+        )
+
+        # Separate coordinates in two pdb files:
+        solute_coor = solute_solvent_coor.select_index(self.solute_index)
+        solute_coor.write(solute_out_pdb, overwrite=True)
+
+        solvent_coor = solute_solvent_coor.select_index(self.solvent_index)
+        solvent_coor.write(solvent_out_pdb, overwrite=True)
+
+        # Create system and simulations:
+        self.system_solute, self.simulation_solute = create_system_simulation(
+            solute_out_pdb,
+            forcefield=forcefield,
+            nonbondedMethod=nonbondedMethod,
+            nonbondedCutoff=nonbondedCutoff,
+            constraints=constraints,
+            platform_name=platform_name,
+            rigidWater=rigidWater,
+            ewaldErrorTolerance=ewaldErrorTolerance,
+            hydrogenMass=hydrogenMass,
+            friction=friction,
+            dt=dt,
+        )
+        self.system_forces_solute = {
+            type(force).__name__: force for force in self.system_solute.getForces()
+        }
+
+        self.system_solvent, self.simulation_solvent = create_system_simulation(
+            solvent_out_pdb,
+            forcefield=forcefield,
+            nonbondedMethod=nonbondedMethod,
+            nonbondedCutoff=nonbondedCutoff,
+            constraints=constraints,
+            platform_name=platform_name,
+            rigidWater=rigidWater,
+            ewaldErrorTolerance=ewaldErrorTolerance,
+            hydrogenMass=hydrogenMass,
+        )
+
+        self.system_forces_solvent = {
+            type(force).__name__: force for force in self.system_solvent.getForces()
+        }
+
 
     def find_nb_solute_system(self):
         """Extract in the solute only system:
         - exeption indexes and values (chargeprod, sigma, epsilon)
 
-        solute nonbonded values are not extracted as they are identical to
+        Solute nonbonded values are not extracted as they are identical to
         the main system. Indexes are [0 :len(nonbonded values)]
 
-        Exeption values are stored as indexes [iatom, jatom] are different.
+        Exception values are stored as indexes [iatom, jatom] are different.
         """
 
         nonbonded_force = self.system_forces_solute["NonbondedForce"]
@@ -536,6 +572,89 @@ class REST2:
                 [iatom, jatom, chargeprod, sigma, epsilon]
             )
 
+    def setup_simulation(
+        self,
+        integrator,
+        temperature=300 * unit.kelvin,
+        pressure=1.0 * unit.atmospheres,
+        barostatInterval=25,
+        platform_name="CUDA",
+    ):
+        """Add the simulation object.
+        
+        parameters
+        ----------
+        integrator : openmm.Integrator
+            Integrator
+        temperature : float * unit.kelvin
+            Temperature, default is 300 * unit.kelvin
+        pressure : float * unit.atmospheres
+            Pressure, default is 1.0 * unit.atmospheres
+        barostatInterval : int
+            Barostat interval, default is 25
+        platform_name : str
+            Platform name, default is "CUDA"
+        
+        """
+
+        # Add PT MonteCarlo barostat
+        self.system.addForce(
+            openmm.MonteCarloBarostat(pressure, temperature, barostatInterval)
+        )
+
+        self.simulation = setup_simulation(
+            self.system,
+            self.positions,
+            self.topology,
+            integrator=integrator,
+            platform_name=platform_name,
+        )
+
+    def compute_solute_solvent_system_energy(self):
+        """Update solute only and solvent only systems
+        coordinates and box vector according to the solute-solvent
+        system values.
+        Extract then forces for each systems.
+
+        Returns
+        -------
+        forces_solute : list of float * unit.kilojoules_per_mole / unit.nanometers
+            Forces on solute
+        forces_solvent : list of float * unit.kilojoules_per_mole / unit.nanometers
+            Forces on solvent
+        """
+
+        sim_state = self.simulation.context.getState(getPositions=True, getEnergy=True)
+
+        tot_positions = sim_state.getPositions(asNumpy=True)
+        box_vector = sim_state.getPeriodicBoxVectors()
+
+        self.simulation_solute.context.setPeriodicBoxVectors(*box_vector)
+        self.simulation_solute.context.setPositions(tot_positions[self.solute_index])
+
+        forces_solute = get_forces(self.system_solute, self.simulation_solute)
+
+        self.simulation_solvent.context.setPeriodicBoxVectors(*box_vector)
+        self.simulation_solvent.context.setPositions(tot_positions[self.solvent_index])
+
+        forces_solvent = get_forces(self.system_solvent, self.simulation_solvent)
+
+        return (forces_solute, forces_solvent)
+
+
+    def update_torsions(self, scale):
+        """Scale system solute torsion by a scale factor."""
+
+        torsion_force = self.solute_torsion_force
+
+        for i, index in enumerate(self.init_torsions_index):
+            p1, p2, p3, p4, periodicity, phase, k = self.init_torsions_value[i]
+            torsion_force.setTorsionParameters(
+                index, p1, p2, p3, p4, [periodicity, phase, k * scale]
+            )
+
+        torsion_force.updateParametersInContext(self.simulation.context)
+
     def update_nonbonded(self, scale):
         """Scale system nonbonded interaction:
         - LJ epsilon by `scale`
@@ -548,7 +667,7 @@ class REST2:
         for i in self.solute_index:
             q, sigma, eps = self.init_nb_param[i]
             nonbonded_force.setParticleParameters(
-                i, q * math.sqrt(scale), sigma, eps * scale
+                i, q * np.sqrt(scale), sigma, eps * scale
             )
 
         for i in range(len(self.init_nb_exept_index)):
@@ -572,7 +691,7 @@ class REST2:
         for i in range(len(self.solute_index)):
             q, sigma, eps = self.init_nb_param[i]
             nonbonded_force.setParticleParameters(
-                i, q * math.sqrt(scale), sigma, eps * scale
+                i, q * np.sqrt(scale), sigma, eps * scale
             )
 
         for i in range(len(self.init_nb_exept_index)):
@@ -597,9 +716,6 @@ class REST2:
         """Extract solute potential energy and solute-solvent interactions."""
 
         solute_force, solvent_force = self.compute_solute_solvent_system_energy()
-
-        # print("Solute:", solute_force)
-        # print("Solvent:", solvent_force)
 
         E_solute_not_scaled = 0 * unit.kilojoules_per_mole
         E_solute_scaled = 0 * unit.kilojoules_per_mole
@@ -627,9 +743,6 @@ class REST2:
 
         system_force = get_forces(self.system, self.simulation)
 
-        # print("System:", system_force)
-
-        E_tot = 0 * unit.kilojoules_per_mole
         solute_torsion_scaled_flag = True
         solute_torsion_not_scaled_flag = False
         system_term = [
@@ -640,23 +753,15 @@ class REST2:
         ]
 
         for i, force in system_force.items():
-            if force["name"] == "NonbondedForce":
-                all_nb = force["energy"]
             # Torsion flag to get first component of dihedral
             # forces (the solute one)
             if force["name"] == "CustomTorsionForce" and solute_torsion_scaled_flag:
-                E_tot += force["energy"]
                 E_solute_scaled += force["energy"]
                 solute_torsion_scaled_flag = False
                 solute_torsion_not_scaled_flag = True
             if force["name"] == "CustomTorsionForce" and solute_torsion_not_scaled_flag:
-                E_tot += force["energy"]
                 E_solute_not_scaled += force["energy"]
                 solute_torsion_not_scaled_flag = False
-            elif force["name"] in system_term:
-                E_tot += force["energy"]
-
-        # print(f"1 Nonbonde solute : {solute_nb} solvent : {solvent_nb} system: {all_nb}")
 
         # Non scaled solvent-solute_non bonded:
         solvent_solute_nb = all_nb - solute_nb - solvent_nb
@@ -664,17 +769,6 @@ class REST2:
         # solvent_solute_nb *= (1 / self.scale)**0.5
         # solute_nb *= 1 / self.scale
 
-        E_tot += solvent_solute_nb + solute_nb + solvent_nb
-        all_nb = solvent_solute_nb + solute_nb + solvent_nb
-
-        # print(f"2 Nonbonde solute : {solute_nb} solvent : {solvent_nb} system: {all_nb}")
-
-        # print(f'Energie (kJ/mol) Solute = {E_solute._value:8.3f} '\
-        #       f'Solvent = {E_solvent._value:8.3f} '\
-        #       f'Total = {E_tot._value:8.3f} '\
-        #       f'Solute-Solvent = {(E_tot - E_solvent - E_solute)._value:8.3f} ')
-
-        # return(E_solute_scaled, E_solute_not_scaled, E_solvent, solvent_solute_nb)
         return (
             (1 / self.scale) * E_solute_scaled,
             E_solute_not_scaled,
@@ -688,6 +782,84 @@ class REST2:
         E_solute_scaled, _, _, solvent_solute_nb = self.compute_all_energies()
 
         return E_solute_scaled + 0.5 * (1 / self.scale) ** 0.5 * solvent_solute_nb
+
+    ###################################
+    ########## OLD FUNCTIONS ##########
+    ###################################
+
+    def separate_angle_pot(self):
+        """Useless in the REST2 case as solute potential energy
+        is obtain from the solute only system.
+        """
+
+        energy_expression = "(k/2)*(theta-theta0)^2;"
+
+        # Create the Solvent bond
+        solvent_angle_force = openmm.CustomAngleForce(energy_expression)
+        solvent_angle_force.addPerAngleParameter("theta0")
+        solvent_angle_force.addPerAngleParameter("k")
+
+        # Create the Solute bond
+        solute_angle_force = openmm.CustomAngleForce(energy_expression)
+        solute_angle_force.addPerAngleParameter("theta0")
+        solute_angle_force.addPerAngleParameter("k")
+
+        original_angle_force = self.system_forces["HarmonicAngleForce"]
+
+        for i in range(original_angle_force.getNumAngles()):
+            p1, p2, p3, theta0, k = original_angle_force.getAngleParameters(i)
+            if (
+                p1 in self.solute_index
+                and p2 in self.solute_index
+                and p3 in self.solute_index
+            ):
+                solute_angle_force.addAngle(p1, p2, p3, [theta0, k])
+            elif (
+                p1 not in self.solute_index
+                and p2 not in self.solute_index
+                and p3 not in self.solute_index
+            ):
+                solvent_angle_force.addAngle(p1, p2, p3, [theta0, k])
+            else:
+                print("Wrong Angle !")
+                exit()
+
+        self.system.addForce(solute_angle_force)
+        self.system.addForce(solvent_angle_force)
+
+    def separate_bond_pot(self):
+        """Useless in the REST2 case as solute potential energy
+        is obtain from the solute only system.
+        """
+
+        energy_expression = "(k/2)*(r-length)^2;"
+
+        # Create the Solvent bond
+        solvent_bond_force = openmm.CustomBondForce(energy_expression)
+        solvent_bond_force.addPerBondParameter("length")
+        solvent_bond_force.addPerBondParameter("k")
+
+        # Create the Solute bond
+        solute_bond_force = openmm.CustomBondForce(energy_expression)
+        solute_bond_force.addPerBondParameter("length")
+        solute_bond_force.addPerBondParameter("k")
+
+        original_bond_force = self.system_forces["HarmonicBondForce"]
+
+        for i in range(original_bond_force.getNumBonds()):
+            p1, p2, length, k = original_bond_force.getBondParameters(i)
+            # print(p1, p2)
+
+            if p1 in self.solute_index and p2 in self.solute_index:
+                solute_bond_force.addBond(p1, p2, [length, k])
+            elif p1 not in self.solute_index and p2 not in self.solute_index:
+                solvent_bond_force.addBond(p1, p2, [length, k])
+            else:
+                print("Wrong bond !")
+                exit()
+
+        self.system.addForce(solute_bond_force)
+        self.system.addForce(solvent_bond_force)
 
     ###########################################################
     ###  OLD FUNCTION To ensure nb calculation are correct  ###
@@ -710,7 +882,7 @@ class REST2:
         if (alpha_ewald / alpha_ewald.unit) == 0.0:
             # If alpha is 0.0, alpha_ewald is computed by OpenMM from from the error tolerance
             tol = nonbonded_force.getEwaldErrorTolerance()
-            alpha_ewald = (1.0 / cutoff_distance) * math.sqrt(-math.log(2.0 * tol))
+            alpha_ewald = (1.0 / cutoff_distance) * np.sqrt(-np.log(2.0 * tol))
         print(alpha_ewald)
 
         # Create CustomNonbondedForce
@@ -793,7 +965,7 @@ class REST2:
         if (alpha_ewald / alpha_ewald.unit) == 0.0:
             # If alpha is 0.0, alpha_ewald is computed by OpenMM from from the error tolerance
             tol = nonbonded_force.getEwaldErrorTolerance()
-            alpha_ewald = (1.0 / cutoff_distance) * math.sqrt(-math.log(2.0 * tol))
+            alpha_ewald = (1.0 / cutoff_distance) * np.sqrt(-np.log(2.0 * tol))
         print(alpha_ewald)
 
         # Create CustomNonbondedForce
@@ -958,7 +1130,7 @@ class REST2:
         if (alpha_ewald / alpha_ewald.unit) == 0.0:
             # If alpha is 0.0, alpha_ewald is computed by OpenMM from from the error tolerance
             tol = nonbonded_force.getEwaldErrorTolerance()
-            alpha_ewald = (1.0 / cutoff_distance) * math.sqrt(-math.log(2.0 * tol))
+            alpha_ewald = (1.0 / cutoff_distance) * np.sqrt(-np.log(2.0 * tol))
         # print(alpha_ewald)
 
         # Create CustomNonbondedForce
@@ -1077,7 +1249,7 @@ class REST2:
         for i in self.solute_index:
             q, sigma, eps = self.init_nb_param[i]
             custom_nonbonded_force.setParticleParameters(
-                i, [q * math.sqrt(scale), sigma, eps * scale]
+                i, [q * np.sqrt(scale), sigma, eps * scale]
             )
 
         # Need to fix simulation
@@ -1088,51 +1260,13 @@ class REST2:
         for i in self.solute_index:
             q, sigma, eps = self.init_nb_param[i]
             custom_nonbonded_force.setParticleParameters(
-                i, [q * math.sqrt(scale), sigma, eps * scale]
+                i, [q * np.sqrt(scale), sigma, eps * scale]
             )
 
         # Need to fix simulation
         custom_nonbonded_force.updateParametersInContext(self.simulation.context)
 
 
-def print_forces(system, simulation):
-
-    forces_dict = {}
-    tot_ener = 0 * unit.kilojoules_per_mole
-
-    for i, force in enumerate(system.getForces()):
-        state = simulation.context.getState(getEnergy=True, groups={i})
-        name = force.getName()
-        pot_e = state.getPotentialEnergy()
-        print(f"{force.getForceGroup():<3} {name:<25} {pot_e}")
-
-        forces_dict[force.getForceGroup()] = {"name": name, "energy": pot_e}
-        tot_ener += pot_e
-
-    print(f'{len(forces_dict)+1:<3} {"Total":<25} {tot_ener}')
-
-    forces_dict[len(forces_dict) + 1] = {"name": "Total", "energy": tot_ener}
-
-    return forces_dict
-
-
-def get_forces(system, simulation):
-
-    forces_dict = {}
-    tot_ener = 0 * unit.kilojoules_per_mole
-
-    for i, force in enumerate(system.getForces()):
-        state = simulation.context.getState(getEnergy=True, groups={i})
-        name = force.getName()
-        pot_e = state.getPotentialEnergy()
-        tot_ener += pot_e
-        # print(f'{force.getForceGroup():<3} {name:<25} {pot_e}')
-
-        forces_dict[force.getForceGroup()] = {"name": name, "energy": pot_e}
-
-    forces_dict[len(forces_dict) + 1] = {"name": "Total", "energy": tot_ener}
-
-    return forces_dict
 
 
 if __name__ == "__main__":
@@ -1151,7 +1285,7 @@ if __name__ == "__main__":
 
     # SYSTEM
 
-    pdb = PDBFile(f"{name}_equi_water.pdb")
+    pdb = app.PDBFile(f"{name}_equi_water.pdb")
 
     integrator = LangevinMiddleIntegrator(temperature, friction, dt)
 
@@ -1202,7 +1336,7 @@ if __name__ == "__main__":
 
     # PEPTIDE system:
 
-    pdb_pep = PDBFile(f"{name}_only_pep.pdb")
+    pdb_pep = app.PDBFile(f"{name}_only_pep.pdb")
 
     integrator_pep = LangevinMiddleIntegrator(temperature, friction, dt)
 
@@ -1222,7 +1356,7 @@ if __name__ == "__main__":
 
     # NO Peptide system
 
-    pdb_no_pep = PDBFile(f"{name}_no_pep.pdb")
+    pdb_no_pep = app.PDBFile(f"{name}_no_pep.pdb")
 
     integrator_no_pep = LangevinMiddleIntegrator(temperature, friction, dt)
 
