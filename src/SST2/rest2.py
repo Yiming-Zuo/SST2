@@ -4,7 +4,9 @@
 
 from io import StringIO
 import numpy as np
+import pandas as pd
 import sys
+import os
 import logging
 import pdb_numpy.format
 
@@ -12,23 +14,20 @@ import openmm
 from openmm import unit
 import openmm.app as app
 
-from .tools import setup_simulation, create_system_simulation, get_forces
+from .tools import (
+    setup_simulation,
+    create_system_simulation,
+    get_forces,
+    run_sim_check_time,
+)
 
 # Logging
 logger = logging.getLogger(__name__)
 
-"""
-To fix:
-
-    - location of the pdb file save (solute.pdb and solvent.pdb)
-    - Add some test to ensure that indexes of solute and solvant are correct
-
-"""
-
 
 class Rest2Reporter(object):
     """Reporter for REST2 simulation
-    
+
     Parameters
     ----------
     file : string
@@ -37,8 +36,9 @@ class Rest2Reporter(object):
         The interval (in time steps) at which to write frames
     rest2 : REST2
         The REST2 object to generate the report
-    
+
     """
+
     def __init__(self, file, reportInterval, rest2):
         self._out = open(file, "w", buffering=1)
         self._out.write(
@@ -58,16 +58,16 @@ class Rest2Reporter(object):
         """Generate a report.
         Compute the energies of the solute and solvent and write them to the
         file (`self._out`).
-        
+
         Parameters
         ----------
         state : State
             The current state of the simulation
-        
+
         Returns
         -------
         None
-                
+
         """
 
         energies = self._rest2.compute_all_energies()
@@ -76,7 +76,10 @@ class Rest2Reporter(object):
 
         time = state.getTime().value_in_unit(unit.picosecond)
         self._out.write(
-            f"{time},{energies[0]._value},{energies[1]._value},{energies[2]._value},{energies[3]._value}\n"
+            f"{time},{energies[0].value_in_unit(unit.kilojoule_per_mole)},"
+            f"{energies[1].value_in_unit(unit.kilojoule_per_mole)},"
+            f"{energies[2].value_in_unit(unit.kilojoule_per_mole)},"
+            f"{energies[3].value_in_unit(unit.kilojoule_per_mole)}\n"
         )
 
 
@@ -101,7 +104,7 @@ class REST2:
         The dict of the system forces
     scale : float
         The scaling factor or lambda, default is 1.0
-    
+
     init_nb_param : list
         The list of the initial nonbonded parameters (charge, sigma, epsilon)
     init_nb_exept_index : list
@@ -109,28 +112,28 @@ class REST2:
     init_nb_exept_value : list
         The list of the initial nonbonded exception parameters
         (atom1, atom2, chargeProd, sigma, epsilon)
-    
+
     solute_torsion_force : CustomTorsionForce
         The torsion force of the solute
     init_torsions_index : list
         The list of the torsion indexes
     init_torsions_value : list
         The list of the initial torsion parameters
-    
+
     system_solute : Solute System
         The solute system
     simulation_solute : Solute Simulation
         The solute simulation
     system_forces_solute : Solute Forces
         The solute forces
-    
+
     system_solvent : Solvent System]
         The solvent system
     simulation_solvent : Solvent Simulation
         The solvent simulation
     system_forces_solvent : Solvent Forces
         The solvent forces
-    
+
     init_nb_exept_solute_value : list
         The list of the initial nonbonded exception parameters of the solute
         (iatom, jatom, chargeprod, sigma, epsilon)
@@ -147,8 +150,8 @@ class REST2:
         temperature=300 * unit.kelvin,
         pressure=1.0 * unit.atmospheres,
         barostatInterval=25,
-        dt=2*unit.femtosecond,
-        friction=1/unit.picoseconds,
+        dt=2 * unit.femtosecond,
+        friction=1 / unit.picoseconds,
         nonbondedMethod=app.PME,
         nonbondedCutoff=1 * unit.nanometers,
         constraints=app.HBonds,
@@ -194,8 +197,8 @@ class REST2:
             The Ewald error tolerance of the system, default is 0.0005
         hydrogenMass : float
             The hydrogen mass of the system, default is 1 amu
-        
-        
+
+
         """
 
         self.system = system
@@ -206,7 +209,10 @@ class REST2:
             set(range(self.system.getNumParticles())).difference(set(self.solute_index))
         )
 
-        assert len(self.solute_index) + len(self.solvent_index) == self.system.getNumParticles()
+        assert (
+            len(self.solute_index) + len(self.solvent_index)
+            == self.system.getNumParticles()
+        )
         assert len(self.solute_index) != 0
         assert len(self.solvent_index) != 0
 
@@ -243,7 +249,7 @@ class REST2:
             barostatInterval=barostatInterval,
             platform_name=platform_name,
         )
-    
+
     def find_solute_nb_index(self):
         """Extract initial solute nonbonded indexes and values (charge, sigma, epsilon).
         Extract also excclusion indexes and values (chargeprod, sigma, epsilon)
@@ -281,7 +287,6 @@ class REST2:
             ] = nonbonded_force.getExceptionParameters(exception_index)
 
             if iatom in self.solute_index and jatom in self.solute_index:
-
                 self.init_nb_exept_index.append(exception_index)
                 self.init_nb_exept_value.append(
                     [iatom, jatom, chargeprod, sigma, epsilon]
@@ -293,7 +298,7 @@ class REST2:
         in the solute system.
 
         Torsion potential is separate in two groups:
-        - the solute (scaled one) 
+        - the solute (scaled one)
         - the solvent and not scaled solute torsion.
 
         As improper angles are not supposed to be scaled, here we extract only
@@ -463,8 +468,8 @@ class REST2:
         rigidWater=True,
         ewaldErrorTolerance=0.0005,
         hydrogenMass=3.0 * unit.amu,
-        friction=1/unit.picoseconds,
-        dt=2*unit.femtosecond,
+        friction=1 / unit.picoseconds,
+        dt=2 * unit.femtosecond,
     ):
         """Extract solute only and solvent only coordinates.
         A sytem and a simulation is then created for both systems.
@@ -477,11 +482,11 @@ class REST2:
             Output pdb file name for solute, default is "solute.pdb"
         solvent_out_pdb : str
             Output pdb file name for solvent, default is "solvent.pdb"
-        nonbondedMethod : openmm.app.forcefield.ForceField
+        nonbondedMethod : Nonbonded Method
             Nonbonded method, default is app.PME
         nonbondedCutoff : float * unit.nanometers
             Nonbonded cutoff
-        constraints : openmm.app.forcefield.ForceField
+        constraints : Constraints
             Constraints
         platform_name : str
 
@@ -496,7 +501,9 @@ class REST2:
         # It has to be removed from pdb files
         top_num_atom = self.topology.getNumAtoms()
 
-        app.PDBFile.writeFile(self.topology, self.positions[:top_num_atom], stdout, True)
+        app.PDBFile.writeFile(
+            self.topology, self.positions[:top_num_atom], stdout, True
+        )
         sys.stdout = old_stdout
 
         # Read
@@ -545,7 +552,6 @@ class REST2:
             type(force).__name__: force for force in self.system_solvent.getForces()
         }
 
-
     def find_nb_solute_system(self):
         """Extract in the solute only system:
         - exeption indexes and values (chargeprod, sigma, epsilon)
@@ -581,7 +587,7 @@ class REST2:
         platform_name="CUDA",
     ):
         """Add the simulation object.
-        
+
         parameters
         ----------
         integrator : openmm.Integrator
@@ -594,7 +600,7 @@ class REST2:
             Barostat interval, default is 25
         platform_name : str
             Platform name, default is "CUDA"
-        
+
         """
 
         # Add PT MonteCarlo barostat
@@ -640,7 +646,6 @@ class REST2:
         forces_solvent = get_forces(self.system_solvent, self.simulation_solvent)
 
         return (forces_solute, forces_solvent)
-
 
     def update_torsions(self, scale):
         """Scale system solute torsion by a scale factor."""
@@ -753,6 +758,8 @@ class REST2:
         ]
 
         for i, force in system_force.items():
+            if force["name"] == "NonbondedForce":
+                all_nb = force["energy"]
             # Torsion flag to get first component of dihedral
             # forces (the solute one)
             if force["name"] == "CustomTorsionForce" and solute_torsion_scaled_flag:
@@ -1182,7 +1189,6 @@ class REST2:
             self.init_nb_param.append([charge, sigma, epsilon])
 
         if solvent == solute:
-
             # Create CustomBondForce for exceptions
             energy_expression = "((4*epsilon*((sigma/r)^12 - (sigma/r)^6)"
             energy_expression += " + ONE_4PI_EPS0*chargeprod/r));"
@@ -1212,7 +1218,6 @@ class REST2:
                 )
             custom_nonbonded_force.addExclusion(iatom, jatom)
             if solvent == solute:
-
                 if (
                     iatom in solute and jatom in solute
                 ):  # or (iatom in solvent and jatom in solvent):
@@ -1238,12 +1243,10 @@ class REST2:
         )
 
         if solvent == solute:
-
             self.system.addForce(custom_bond_force)
             self.add_negative_force(custom_bond_force)
 
     def update_custom_nonbonded(self, scale):
-
         custom_nonbonded_force = self.system_forces["CustomNonbondedForce"]
 
         for i in self.solute_index:
@@ -1267,10 +1270,153 @@ class REST2:
         custom_nonbonded_force.updateParametersInContext(self.simulation.context)
 
 
+def run_rest2(
+    sys_rest2,
+    generic_name,
+    tot_steps,
+    dt,
+    save_step_dcd=100000,
+    save_step_log=500,
+    save_step_rest2=500,
+    rest2_reporter=True,
+    overwrite=False,
+    save_checkpoint_steps=None,
+):
+    """
+    Run REST2 simulation
+
+    Parameters
+    ----------
+    sys_rest2 : Rest2 object
+        System to run
+    generic_name : str
+        Generic name for output files
+    tot_steps : int
+        Total number of steps to run
+    dt : float
+        Time step in fs
+    save_step_dcd : int, optional
+        Step to save dcd file, by default 100000
+    save_step_log : int, optional
+        Step to save log file, by default 500
+    save_step_rest2 : int, optional
+        Step to save rest2 file, by default 500
+    rest2_reporter : bool, optional
+        If True, save rest2 file, by default True
+    overwrite : bool, optional
+        If True, overwrite previous files, by default False
+    save_checkpoint_steps : int, optional
+        Step to save checkpoint file, by default None
+
+    """
+
+    tot_steps = np.ceil(tot_steps)
+
+    if not overwrite and os.path.isfile(generic_name + "_final.xml"):
+        logger.info(
+            f"File {generic_name}_final.xml exists already, skip run_rest2() step"
+        )
+        sys_rest2.simulation.loadState(generic_name + "_final.xml")
+        return
+    elif not overwrite and os.path.isfile(generic_name + ".xml"):
+        # Get part number
+        part = 2
+        last_out_data = generic_name + ".csv"
+        while os.path.isfile(f"{generic_name}_part_{part}.csv"):
+            last_out_data = f"{generic_name}_part_{part}.csv"
+            part += 1
+
+        if part != 2:
+            logger.info(
+                f"File {generic_name}_part_{part - 1}.xml exists, restart run_basic_rest2()"
+            )
+            sys_rest2.simulation.loadState(f"{generic_name}_part_{part - 1}.xml")
+        else:
+            logger.info(f"File {generic_name}.xml exists, restart run_basic_rest2()")
+            sys_rest2.simulation.loadState(f"{generic_name}.xml")
+
+        # Get last step of checkpoint:
+        df_sim = pd.read_csv(last_out_data)
+
+        chk_step = df_sim['#"Step"'][df_sim['#"Step"'] % save_step_dcd == 0].iloc[-1]
+        # Bug with dcd file and step larger than 2147483647
+        if chk_step >= 2147483647:
+            sys_rest2.simulation.currentStep = 0
+        else:
+            sys_rest2.simulation.currentStep = int(chk_step)
+        print(f"Restart at step {sys_rest2.simulation.currentStep}")
+
+        tot_steps -= chk_step
+
+        out_name = f"{generic_name}_part_{part}"
+    else:
+        sys_rest2.simulation.currentStep = 0
+        out_name = generic_name
+
+    dcd_reporter = app.DCDReporter(f"{out_name}.dcd", save_step_dcd)
+    data_reporter = app.StateDataReporter(
+        f"{out_name}.csv",
+        save_step_log,
+        totalSteps=tot_steps,
+        step=True,
+        potentialEnergy=True,
+        totalEnergy=True,
+        speed=True,
+        temperature=True,
+    )
+    if rest2_reporter:
+        rest2_reporter = Rest2Reporter(
+            f"{out_name}_rest2.csv", save_step_rest2, sys_rest2
+        )
+
+    stdout_reporter = app.StateDataReporter(
+        sys.stdout,
+        save_step_dcd,
+        step=True,
+        temperature=True,
+        speed=True,
+        remainingTime=True,
+        totalSteps=tot_steps,
+    )
+    check_reporter = app.CheckpointReporter(
+        f"{out_name}.xml", save_step_dcd, writeState=True
+    )
+
+    sys_rest2.simulation.reporters.append(dcd_reporter)
+    sys_rest2.simulation.reporters.append(stdout_reporter)
+    sys_rest2.simulation.reporters.append(data_reporter)
+    sys_rest2.simulation.reporters.append(check_reporter)
+    if rest2_reporter:
+        sys_rest2.simulation.reporters.append(rest2_reporter)
+
+    run_sim_check_time(
+        sys_rest2.simulation,
+        tot_steps,
+        dt,
+        save_checkpoint_steps=save_checkpoint_steps,
+        chekpoint_name=generic_name,
+    )
+
+    sys_rest2.simulation.saveState(generic_name + "_final.xml")
+
+    # Save position:
+    positions = sys_rest2.simulation.context.getState(
+        getVelocities=False,
+        getPositions=True,
+        getForces=False,
+        getEnergy=False,
+        getParameters=False,
+        groups=-1,
+    ).getPositions()
+
+    app.PDBFile.writeFile(
+        sys_rest2.topology,
+        positions[: sys_rest2.topology.getNumAtoms()],
+        open(f"{generic_name}.pdb", "w"),
+    )
 
 
 if __name__ == "__main__":
-
     # Check energy decompostion is correct:
 
     # Whole system:

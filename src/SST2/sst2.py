@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # coding: utf-8
 
+
 """
 simulatedtempering.py: Implements simulated tempering
 
@@ -36,9 +37,11 @@ __version__ = "1.0"
 
 import openmm.unit as unit
 import random
+import os
 from sys import stdout
 import pandas as pd
 import numpy as np
+import logging
 
 try:
     import bz2
@@ -53,6 +56,11 @@ try:
     have_gzip = True
 except:
     have_gzip = False
+
+# Logging
+logger = logging.getLogger(__name__)
+
+from SST2.rest2 import run_rest2
 
 
 class SST2(object):
@@ -106,10 +114,7 @@ class SST2(object):
     def __init__(
         self,
         rest2,
-        temperatures=None,
-        numTemperatures=None,
-        minTemperature=None,
-        maxTemperature=None,
+        temperatures,
         refTemperature=None,
         weights=None,
         tempChangeInterval=25,
@@ -126,12 +131,8 @@ class SST2(object):
             The Simulation defining the System, Context, and Integrator to use
         temperatures: list
             The list of temperatures to use for tempering, in increasing order
-        numTemperatures: int
-            The number of temperatures to use for tempering.  If temperatures is not None, this is ignored.
-        minTemperature: temperature
-            The minimum temperature to use for tempering.  If temperatures is not None, this is ignored.
-        maxTemperature: temperature
-            The maximum temperature to use for tempering.  If temperatures is not None, this is ignored.
+        refTemperature: temperature
+            The reference temperature to use for tempering. If this is not specified, the first temperature in the list is used.
         weights: list
             The weight factor for each temperature.  If none, weights are selected automatically.
         tempChangeInterval: int
@@ -143,89 +144,35 @@ class SST2(object):
         """
         self.rest2 = rest2
         self.simulation = rest2.simulation
-        if temperatures is None:
-            if unit.is_quantity(minTemperature):
-                minTemperature = minTemperature.value_in_unit(unit.kelvin)
-            else:
-                minTemperature *= unit.kelvin
 
-            if unit.is_quantity(maxTemperature):
-                maxTemperature = maxTemperature.value_in_unit(unit.kelvin)
-            else:
-                maxTemperature *= unit.kelvin
+        numTemperatures = len(temperatures)
+        self.temperatures = [
+            t.in_units_of(unit.kelvin) if unit.is_quantity(t) else t * unit.kelvin
+            for t in temperatures
+        ]
+        minTemperature = self.temperatures[0]
+        maxTemperature = self.temperatures[-1]
 
-            if refTemperature is None or refTemperature * unit.kelvin == minTemperature:
-                refTemperature = minTemperature
-                print(minTemperature, maxTemperature, numTemperatures)
-                self.temperatures = [
-                    minTemperature
-                    * (
-                        (maxTemperature / minTemperature)
-                        ** (i / float(numTemperatures - 1))
-                    )
-                    for i in range(numTemperatures)
-                ]
-                self.temp_ref_index = 0
-            else:
-                if unit.is_quantity(refTemperature):
-                    refTemperature = refTemperature.value_in_unit(unit.kelvin)
-                else:
-                    refTemperature *= unit.kelvin
-
-                self.temperatures = [
-                    minTemperature
-                    * (
-                        (maxTemperature / minTemperature)
-                        ** (i / float(numTemperatures - 1))
-                    )
-                    for i in range(numTemperatures)
-                ]
-                diff_temp = [abs(temp - refTemperature) for temp in self.temperatures]
-                ref_index = diff_temp.index(min(diff_temp))
-
-                print(self.temperatures)
-
-                if ref_index > 0:
-                    self.temperatures = [
-                        minTemperature
-                        * ((refTemperature / minTemperature) ** (i / ref_index))
-                        for i in range(ref_index)
-                    ]
-                    self.temperatures += [
-                        refTemperature
-                        * ((maxTemperature / refTemperature))
-                        ** (i / (numTemperatures - ref_index - 1))
-                        for i in range(numTemperatures - ref_index)
-                    ]
-                    self.temp_ref_index = ref_index
-                else:
-                    self.temperatures = [minTemperature] + [
-                        refTemperature
-                        * ((maxTemperature / refTemperature))
-                        ** (i / (numTemperatures - 2))
-                        for i in range(numTemperatures - 1)
-                    ]
-                    self.temp_ref_index = 1
+        if refTemperature is None:
+            self.refTemperature = minTemperature
         else:
-            numTemperatures = len(temperatures)
-            self.temperatures = [
-                (t.value_in_unit(unit.kelvin) if unit.is_quantity(t) else t)
-                * unit.kelvin
-                for t in temperatures
-            ]
-            minTemperature = self.temperatures[0]
-            maxTemperature = self.temperatures[-1]
-            self.refTemperature = refTemperature * unit.kelvin
-            self.temp_ref_index = self.temperatures.index(self.refTemperature)
+            if unit.is_quantity(refTemperature):
+                self.refTemperature = refTemperature.in_units_of(unit.kelvin)
+            else:
+                self.refTemperature = refTemperature * unit.kelvin
 
-            if any(
-                self.temperatures[i] >= self.temperatures[i + 1]
-                for i in range(numTemperatures - 1)
-            ):
-                raise ValueError(
-                    "The temperatures must be in strictly increasing order"
-                )
-        print(
+        assert (
+            self.refTemperature in self.temperatures
+        ), f"Reference temperature {self.refTemperature} not in temperatures_list {self.temperatures}"
+        self.temp_ref_index = self.temperatures.index(self.refTemperature)
+
+        if any(
+            self.temperatures[i] >= self.temperatures[i + 1]
+            for i in range(numTemperatures - 1)
+        ):
+            raise ValueError("The temperatures must be in strictly increasing order")
+
+        logger.info(
             f"Min={minTemperature}, Ref={refTemperature}, Max={maxTemperature}, temp_list={[temp._value for temp in self.temperatures]}"
         )
         self.tempChangeInterval = tempChangeInterval
@@ -274,7 +221,7 @@ class SST2(object):
                 df_temp = pd.read_csv(restart_file_full[0])
 
                 for i in range(1, len(restart_file)):
-                    print(f"Reading part {i}")
+                    logger.info(f"Reading part {i}")
                     df_sim_part = pd.read_csv(restart_file[i])
                     df_temp_part = pd.read_csv(restart_file_full[i])
 
@@ -294,13 +241,12 @@ class SST2(object):
                 df_sim["Temperature (K)"] = df_temp["Aim Temp (K)"]
                 temp_array = df_sim["Temperature (K)"].unique()
                 temp_array.sort()
-                print(temp_array)
+                logger.info(temp_array)
 
                 # Remove Nan rows (rare cases of crashes)
                 df_temp = df_temp[df_temp.iloc[:, 0].notna()]
 
                 for temp_index, temp in enumerate(temp_array):
-
                     df_local = df_temp[df_temp["Aim Temp (K)"] == temp]
                     self._e_num[temp_index] = len(df_local)
                     self._e_solute_avg[temp_index] = (
@@ -317,17 +263,16 @@ class SST2(object):
                 first_temp_index = 0
                 for index, row in df_sim.iloc[::-1].iterrows():
                     if index % (50 * 10) == 0:
-                        print(index)
                         temp_index = np.where(temp_array == row["Temperature (K)"])[0][
                             0
                         ]
                         first_temp_index = temp_index
                         break
 
-                print(self._e_num)
-                print(self._e_solute_avg)
-                print(self._e_solute_solv_avg)
-                print(f"last temperature = {temp_array[first_temp_index]}")
+                logger.info(self._e_num)
+                logger.info(self._e_solute_avg)
+                logger.info(self._e_solute_solv_avg)
+                logger.info(f"last temperature = {temp_array[first_temp_index]}")
 
         else:
             self._weights = weights
@@ -434,6 +379,11 @@ class SST2(object):
         self.simulation.step(steps)
 
     def _compute_weight(self, i, j):
+        """Compute the difference of weight $w_j - w_i$
+        using the following equation:
+
+        $$(w_j - w_i) = (\beta_j - \beta_i) \frac{ (\braket{E_{pp}^{(1)}}_i -  \braket{E_{pp}^{(1)}}_j)}{2} +  (\sqrt{\beta_{ref} \beta_j} - \sqrt{\beta_{ref} \beta_i}) \frac {(\braket{E_{pw}}_i - \braket{E_{pw}}_j)}{2}$$
+        """
 
         if self._e_num[j] != 0:
             avg_ener_solut = self._e_solute_avg[i] / 2
@@ -548,3 +498,190 @@ class SST2(object):
 # -651.2058710416085 kJ/mol -2082.3374353838976 kJ/mol
 # [-774.0805157886525, -746.9156031589454, -745.8530421384646, -734.1762990186642, -711.7915332524436, -729.9946964283761, -694.0997403755065, -663.2442182707645, 0.0, 0.0]
 # [-2437.0540461474134, -2362.545113976842, -2297.780046082346, -2252.782031692964, -2202.961638364378, -2094.6851449334276, -2016.3382915321304, -2031.4306585449015, 0.0, 0.0]
+
+
+def run_sst2(
+    sys_rest2,
+    generic_name,
+    tot_steps,
+    dt,
+    temperatures,
+    ref_temp,
+    save_step_dcd=100000,
+    save_step_log=500,
+    save_step_rest2=500,
+    tempChangeInterval=500,
+    reportInterval=500,
+    overwrite=False,
+    save_checkpoint_steps=None,
+):
+    """
+    Run a SST2 simulation.
+
+    Parameters
+    ----------
+    sys_rest2 : Rest2 object
+        The system to simulate.
+    generic_name : str
+        Generic name for the output files.
+    tot_steps : int
+        Total number of steps to run.
+    dt : float
+        Time step in fs.
+    temperatures : list of float
+        List of temperatures to simulate.
+    ref_temp : float
+        Reference temperature.
+    save_step_dcd : int, optional
+        Number of steps between each DCD save. The default is 100000.
+    save_step_log : int, optional
+        Number of steps between each log save. The default is 500.
+    save_step_rest2 : int, optional
+        Number of steps between each Rest2 save. The default is 500.
+    tempChangeInterval : int, optional
+        Number of steps between each temperature change. The default is 500.
+    reportInterval : int, optional
+        Number of steps between each report. The default is 500.
+    overwrite : bool, optional
+        Overwrite the previous simulation. The default is True.
+    save_checkpoint_steps : int, optional
+        Number of steps between each checkpoint save. The default is None.
+
+
+    """
+
+    if unit.is_quantity(ref_temp):
+        ref_temp = ref_temp.in_units_of(unit.kelvin)
+    else:
+        ref_temp *= unit.kelvin
+
+    assert (
+        ref_temp in temperatures
+    ), f"Reference temperature {ref_temp} not in temperatures_list {temperatures}"
+
+    report_sst2 = f"{generic_name}_sst2_full.csv"
+    restart_file = None
+    restart_file_full = None
+    tot_steps = np.ceil(tot_steps)
+
+    if not overwrite and os.path.isfile(report_sst2):
+        logger.info(
+            f"File {generic_name}_sst2_full.csv exists already, restart run_sst2() step"
+        )
+        # Get part number
+        part = 2
+
+        report_sst2 = f"{generic_name}_sst2_full_part_{part}.csv"
+        report_simple_sst2 = f"{generic_name}_sst2_part_{part}.csv"
+
+        restart_file = [f"{generic_name}_sst2.csv"]
+        restart_file_full = [f"{generic_name}_sst2_full.csv"]
+
+        while os.path.isfile(report_sst2):
+            restart_file.append(report_simple_sst2)
+            restart_file_full.append(report_sst2)
+            report_sst2 = f"{generic_name}_sst2_full_part_{part}.csv"
+            report_simple_sst2 = f"{generic_name}_sst2_part_{part}.csv"
+            part += 1
+
+        if part != 2:
+            restart_file = restart_file[:-1]
+            restart_file_full = restart_file_full[:-1]
+
+        logger.info(f"Using restart file : {restart_file}")
+
+    sys_rest2.simulation.reporters = []
+    sys_rest2.simulation.currentStep = 0
+
+    sst2 = SST2(
+        sys_rest2,
+        temperatures=temperatures,
+        refTemperature=ref_temp,
+        tempChangeInterval=tempChangeInterval,
+        reportFile=report_sst2,
+        reportInterval=reportInterval,
+        restart_file=restart_file,
+        restart_file_full=restart_file_full,
+    )
+
+    logger.info(f"- Launch SST2")
+    run_rest2(
+        sst2.rest2,
+        f"{generic_name}_sst2",
+        dt=dt,
+        tot_steps=tot_steps,
+        # topology=pdb.topology, # To fix !!!
+        save_step_dcd=save_step_dcd,
+        save_step_log=save_step_log,
+        rest2_reporter=False,
+        save_step_rest2=500,
+        save_checkpoint_steps=save_checkpoint_steps,
+    )
+
+
+def compute_temperature_list(
+    minTemperature, maxTemperature, numTemperatures, refTemperature=None
+):
+    """Compute the list of temperatures to simulate.
+
+    Parameters
+    ----------
+    minTemperature : float
+        Minimum temperature to simulate.
+    maxTemperature : float
+        Maximum temperature to simulate.
+    numTemperatures : int
+        Number of temperatures to simulate.
+    refTemperature : float, optional
+        Reference temperature. The default is None.
+
+    """
+
+    if unit.is_quantity(minTemperature):
+        minTemperature = minTemperature.in_units_of(unit.kelvin)
+    else:
+        minTemperature *= unit.kelvin
+
+    if unit.is_quantity(maxTemperature):
+        maxTemperature = maxTemperature.in_units_of(unit.kelvin)
+    else:
+        maxTemperature *= unit.kelvin
+
+    if refTemperature is not None:
+        if unit.is_quantity(refTemperature):
+            refTemperature = refTemperature.in_units_of(unit.kelvin)
+        else:
+            refTemperature *= unit.kelvin
+
+    # Case with refTemp is minTemp
+    temperatures = [
+        minTemperature
+        * ((maxTemperature / minTemperature) ** (i / float(numTemperatures - 1)))
+        for i in range(numTemperatures)
+    ]
+    if refTemperature is None or refTemperature == minTemperature:
+        refTemperature = minTemperature
+    else:
+        # Get closest temp to ref temp
+        diff_temp = [abs(temp - refTemperature) for temp in temperatures]
+        ref_index = diff_temp.index(min(diff_temp))
+
+        if ref_index > 0:
+            temperatures = [
+                minTemperature * ((refTemperature / minTemperature) ** (i / ref_index))
+                for i in range(ref_index)
+            ]
+            temperatures += [
+                refTemperature
+                * ((maxTemperature / refTemperature))
+                ** (i / (numTemperatures - ref_index - 1))
+                for i in range(numTemperatures - ref_index)
+            ]
+        else:
+            temperatures = [minTemperature] + [
+                refTemperature
+                * ((maxTemperature / refTemperature)) ** (i / (numTemperatures - 2))
+                for i in range(numTemperatures - 1)
+            ]
+
+    return temperatures
