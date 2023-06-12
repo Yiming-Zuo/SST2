@@ -109,6 +109,18 @@ class SST2(object):
     match the interval at which you save frames from the simulation).
     You can specify the output file and reporting interval with the
     "reportFile" and "reportInterval" arguments.
+
+    Parameters
+    ----------
+    rest2: REST2
+        The REST2 object defining the System, Context, and Integrator to use
+    simulation: Simulation
+        The Simulation defining the System, Context, and Integrator to use
+    
+    Methods
+    -------
+    step(steps)
+        Run a number of time steps.
     """
 
     def __init__(

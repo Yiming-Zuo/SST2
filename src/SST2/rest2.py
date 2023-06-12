@@ -28,7 +28,7 @@ logger = logging.getLogger(__name__)
 class Rest2Reporter(object):
     """Reporter for REST2 simulation
 
-    Parameters
+    Attributes
     ----------
     file : string
         The file to write to
@@ -36,6 +36,12 @@ class Rest2Reporter(object):
         The interval (in time steps) at which to write frames
     rest2 : REST2
         The REST2 object to generate the report
+
+    Methods
+    -------
+    describeNextReport(simulation)
+        Generate a report.
+
 
     """
 
@@ -137,6 +143,13 @@ class REST2:
     init_nb_exept_solute_value : list
         The list of the initial nonbonded exception parameters of the solute
         (iatom, jatom, chargeprod, sigma, epsilon)
+
+    Methods
+    -------
+    compute_all_energies()
+        Compute the energies of the solute and solvent
+    compute_solute_energies()
+        Compute the energies of the solute
     """
 
     def __init__(

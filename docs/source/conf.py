@@ -21,14 +21,15 @@ import sys
 sys.path.insert(0, os.path.abspath('../../src/'))
 
 # This command doesn't get any sense for me (previous one should be enough)
-# sys.path.insert(0, os.path.abspath('../../src/SST2/'))
+sys.path.insert(0, os.path.abspath('../../src/SST2/'))
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
 
 
 extensions = [
-    'sphinx.ext.autodoc',
+    "sphinx.ext.autodoc",  # Core Sphinx library for auto html doc generation from docstrings
+    "sphinx.ext.autosummary",  # Create neat summary tables for modules/classes/methods etc
     'sphinx.ext.coverage',
     'sphinx.ext.todo',
     'sphinx.ext.viewcode',
@@ -68,6 +69,7 @@ man_pages = [
 ]
 
 # autodoc_mock_imports = ["numpy", "scipy", "pytest"]
+autodoc_mock_imports = ["pytest"]
 
 # Exclude unit pages (tests and data) from the documentation
 exclude_patterns = ['SST2.tests.rst', 'modules.rst']
