@@ -165,20 +165,40 @@ def test_peptide_protein_complex(tmp_path):
     tools.print_forces(test.system, test.simulation)
     forces_rest2 = tools.get_forces(test.system, test.simulation)
 
-
     print("Compare not scaled energy rest2 vs. classic:\n")
     # HarmonicBondForce
-    assert pytest.approx(forces_rest2[0]["energy"] / forces_sys[0]["energy"], tolerance) == 1.0
+    assert (
+        pytest.approx(forces_rest2[0]["energy"] / forces_sys[0]["energy"], tolerance)
+        == 1.0
+    )
     # HarmonicAngleForce
-    assert pytest.approx(forces_rest2[1]["energy"] / forces_sys[1]["energy"], tolerance) == 1.0
+    assert (
+        pytest.approx(forces_rest2[1]["energy"] / forces_sys[1]["energy"], tolerance)
+        == 1.0
+    )
     # NonbondedForce
-    assert pytest.approx(forces_rest2[2]["energy"] / forces_sys[2]["energy"], tolerance) == 1.0
+    assert (
+        pytest.approx(forces_rest2[2]["energy"] / forces_sys[2]["energy"], tolerance)
+        == 1.0
+    )
     # CustomTorsionForce
-    assert pytest.approx(
-        (forces_rest2[4]["energy"] + forces_rest2[5]["energy"] + forces_rest2[6]["energy"])
-          / forces_sys[3]["energy"], tolerance) == 1.0
+    assert (
+        pytest.approx(
+            (
+                forces_rest2[4]["energy"]
+                + forces_rest2[5]["energy"]
+                + forces_rest2[6]["energy"]
+            )
+            / forces_sys[3]["energy"],
+            tolerance,
+        )
+        == 1.0
+    )
     # Total
-    assert pytest.approx(forces_rest2[9]["energy"] / forces_sys[6]["energy"], tolerance) == 1.0
+    assert (
+        pytest.approx(forces_rest2[9]["energy"] / forces_sys[6]["energy"], tolerance)
+        == 1.0
+    )
 
     (
         E_solute_scaled,
@@ -186,8 +206,6 @@ def test_peptide_protein_complex(tmp_path):
         E_solvent,
         solvent_solute_nb,
     ) = test.compute_all_energies()
-
-
 
     print(f"E_solute_scaled      {E_solute_scaled}")
     print(f"E_solute_not_scaled  {E_solute_not_scaled}")
@@ -198,32 +216,74 @@ def test_peptide_protein_complex(tmp_path):
     tolerance = 0.0001
 
     # check E_solute_scaled
-    assert pytest.approx((forces_rest2[4]["energy"] + forces_solute[2]["energy"]) / E_solute_scaled, tolerance) == 1.0
+    assert (
+        pytest.approx(
+            (forces_rest2[4]["energy"] + forces_solute[2]["energy"]) / E_solute_scaled,
+            tolerance,
+        )
+        == 1.0
+    )
     # check E_solute_not_scaled
-    assert pytest.approx((forces_rest2[5]["energy"] + forces_solute[0]["energy"] + forces_solute[1]["energy"]) / E_solute_not_scaled, tolerance) == 1.0
+    assert (
+        pytest.approx(
+            (
+                forces_rest2[5]["energy"]
+                + forces_solute[0]["energy"]
+                + forces_solute[1]["energy"]
+            )
+            / E_solute_not_scaled,
+            tolerance,
+        )
+        == 1.0
+    )
     # check E_solute
-    assert pytest.approx((E_solute_scaled + E_solute_not_scaled) / forces_solute[6]["energy"], tolerance) == 1.0
+    assert (
+        pytest.approx(
+            (E_solute_scaled + E_solute_not_scaled) / forces_solute[6]["energy"],
+            tolerance,
+        )
+        == 1.0
+    )
     # check E_solvent
     assert pytest.approx((E_solvent) / forces_solvent[6]["energy"], tolerance) == 1.0
     # check E_solvent_solute_nb
-    assert pytest.approx(
-        (forces_rest2[2]["energy"] - forces_solvent[2]["energy"] - forces_solute[2]["energy"]) / solvent_solute_nb,
-        tolerance) == 1.0
+    assert (
+        pytest.approx(
+            (
+                forces_rest2[2]["energy"]
+                - forces_solvent[2]["energy"]
+                - forces_solute[2]["energy"]
+            )
+            / solvent_solute_nb,
+            tolerance,
+        )
+        == 1.0
+    )
 
     # Compare REST2 solute and solvent simulation with previous classic simulation
     solute_force, solvent_force = test.compute_solute_solvent_system_energy()
     print(f"Solute Force")
     for i, force in solute_force.items():
-        print(f"{i}   {force['name']:25} {force['energy'].value_in_unit(unit.kilojoule_per_mole):.2f} KJ/mol")
-        if force['name'] != "CMMotionRemover":
-            assert pytest.approx(force["energy"] / forces_solute[i]["energy"], tolerance) == 1.0
+        print(
+            f"{i}   {force['name']:25} {force['energy'].value_in_unit(unit.kilojoule_per_mole):.2f} KJ/mol"
+        )
+        if force["name"] != "CMMotionRemover":
+            assert (
+                pytest.approx(force["energy"] / forces_solute[i]["energy"], tolerance)
+                == 1.0
+            )
 
     print(f"Solvent Force")
     for i, force in solvent_force.items():
-        print(f"{i}   {force['name']:25} {force['energy'].value_in_unit(unit.kilojoule_per_mole):.2f} KJ/mol")
-        if force['name'] != "CMMotionRemover":
-            assert pytest.approx(force["energy"] / forces_solvent[i]["energy"], tolerance) == 1.0
-    
+        print(
+            f"{i}   {force['name']:25} {force['energy'].value_in_unit(unit.kilojoule_per_mole):.2f} KJ/mol"
+        )
+        if force["name"] != "CMMotionRemover":
+            assert (
+                pytest.approx(force["energy"] / forces_solvent[i]["energy"], tolerance)
+                == 1.0
+            )
+
     for scale in [0.5, 1.0, 1.5]:
         test.scale_nonbonded_torsion(scale)
         print(f"\nREST2 forces lambda = {scale:.1f}  Temp  = {300/scale:.1f} K\n")
@@ -231,16 +291,44 @@ def test_peptide_protein_complex(tmp_path):
 
         # compare scaled with non scaled REST2:
         for i, force in forces_rest2_new.items():
-            print(f"{i}   {force['name']:25} {force['energy'].value_in_unit(unit.kilojoule_per_mole):.2f} KJ/mol")
+            print(
+                f"{i}   {force['name']:25} {force['energy'].value_in_unit(unit.kilojoule_per_mole):.2f} KJ/mol"
+            )
             if scale != 1.0:
-                if i in [2, 9]: # NonbondedForce, Total
-                    assert pytest.approx(force["energy"] / forces_rest2[i]["energy"], tolerance) != 1.0
-                elif i in [4]: # CustomTorsionForce scaled
-                    assert pytest.approx( (force["energy"] / scale) / forces_rest2[i]["energy"], tolerance) == 1.0
-                elif i in [0, 1, 5, 6]: # HarmonicBondForce, HarmonicAngleForce, CustomTorsionForces not scaled
-                    assert pytest.approx(force["energy"] / forces_rest2[i]["energy"], tolerance) == 1.0
+                if i in [2, 9]:  # NonbondedForce, Total
+                    assert (
+                        pytest.approx(
+                            force["energy"] / forces_rest2[i]["energy"], tolerance
+                        )
+                        != 1.0
+                    )
+                elif i in [4]:  # CustomTorsionForce scaled
+                    assert (
+                        pytest.approx(
+                            (force["energy"] / scale) / forces_rest2[i]["energy"],
+                            tolerance,
+                        )
+                        == 1.0
+                    )
+                elif i in [
+                    0,
+                    1,
+                    5,
+                    6,
+                ]:  # HarmonicBondForce, HarmonicAngleForce, CustomTorsionForces not scaled
+                    assert (
+                        pytest.approx(
+                            force["energy"] / forces_rest2[i]["energy"], tolerance
+                        )
+                        == 1.0
+                    )
             elif i in [0, 1, 2, 4, 5, 6, 9]:
-                assert pytest.approx( (force["energy"] / scale) / forces_rest2[i]["energy"], tolerance) == 1.0
+                assert (
+                    pytest.approx(
+                        (force["energy"] / scale) / forces_rest2[i]["energy"], tolerance
+                    )
+                    == 1.0
+                )
 
         (
             E_solute_scaled_new,
@@ -255,37 +343,116 @@ def test_peptide_protein_complex(tmp_path):
         print(f"solvent_solute_nb    {solvent_solute_nb_new}")
 
         assert pytest.approx(E_solute_scaled_new / E_solute_scaled, tolerance) == 1.0
-        assert pytest.approx(E_solute_not_scaled_new / E_solute_not_scaled, tolerance) == 1.0
+        assert (
+            pytest.approx(E_solute_not_scaled_new / E_solute_not_scaled, tolerance)
+            == 1.0
+        )
         assert pytest.approx(E_solvent_new / E_solvent_new, tolerance) == 1.0
-        assert pytest.approx(solvent_solute_nb_new / solvent_solute_nb, tolerance) == 1.0
+        assert (
+            pytest.approx(solvent_solute_nb_new / solvent_solute_nb, tolerance) == 1.0
+        )
 
         # Compare REST2 solute and solvent simulation with previous classic simulation
-        solute_force_new, solvent_force_new = test.compute_solute_solvent_system_energy()
+        (
+            solute_force_new,
+            solvent_force_new,
+        ) = test.compute_solute_solvent_system_energy()
         print(f"Solute Force")
         for i, force in solute_force_new.items():
-            print(f"{i}   {force['name']:25} {force['energy'].value_in_unit(unit.kilojoule_per_mole):.2f} KJ/mol {forces_solute[i]['energy']}")
-            if i in [0, 1, 3]: # HarmonicBondForce, HarmonicAngleForce, CustomTorsionForces not scaled
-                assert pytest.approx(force["energy"] / forces_solute[i]["energy"], tolerance) == 1.0
-            if i in [2,]: # NonbondedForce
-                assert pytest.approx((force["energy"]/scale) / forces_solute[i]["energy"], tolerance) == 1.0
+            print(
+                f"{i}   {force['name']:25} {force['energy'].value_in_unit(unit.kilojoule_per_mole):.2f} KJ/mol {forces_solute[i]['energy']}"
+            )
+            if i in [
+                0,
+                1,
+                3,
+            ]:  # HarmonicBondForce, HarmonicAngleForce, CustomTorsionForces not scaled
+                assert (
+                    pytest.approx(
+                        force["energy"] / forces_solute[i]["energy"], tolerance
+                    )
+                    == 1.0
+                )
+            if i in [
+                2,
+            ]:  # NonbondedForce
+                assert (
+                    pytest.approx(
+                        (force["energy"] / scale) / forces_solute[i]["energy"],
+                        tolerance,
+                    )
+                    == 1.0
+                )
 
         print(f"Solvent Force")
         for i, force in solvent_force_new.items():
-            print(f"{i}   {force['name']:25} {force['energy'].value_in_unit(unit.kilojoule_per_mole):.2f} KJ/mol")
-            if force['name'] != "CMMotionRemover":
-                assert pytest.approx(force["energy"] / forces_solvent[i]["energy"], tolerance) == 1.0
-        
-        # check E_solute_scaled
-        assert pytest.approx(((forces_rest2_new[4]["energy"] + solute_force_new[2]["energy"])/scale) / E_solute_scaled_new, tolerance) == 1.0
-        # check E_solute_not_scaled
-        assert pytest.approx((forces_rest2_new[5]["energy"] + solute_force_new[0]["energy"] + solute_force_new[1]["energy"]) / E_solute_not_scaled_new, tolerance) == 1.0
-        # check E_solute
-        Correct_E_solute = forces_rest2_new[4]["energy"] + forces_rest2_new[5]["energy"] + solute_force_new[0]["energy"] + solute_force_new[1]["energy"] + solute_force_new[2]["energy"]
-        assert pytest.approx((E_solute_scaled_new * scale + E_solute_not_scaled_new) / Correct_E_solute, tolerance) == 1.0
-        # check E_solvent
-        assert pytest.approx((E_solvent_new) / solvent_force_new[6]["energy"], tolerance) == 1.0
-        # check E_solvent_solute_nb
-        assert pytest.approx(
-            (forces_rest2_new[2]["energy"] - solvent_force_new[2]["energy"] - solute_force_new[2]["energy"]) / (scale**0.5 * solvent_solute_nb_new),
-            tolerance) == 1.0
+            print(
+                f"{i}   {force['name']:25} {force['energy'].value_in_unit(unit.kilojoule_per_mole):.2f} KJ/mol"
+            )
+            if force["name"] != "CMMotionRemover":
+                assert (
+                    pytest.approx(
+                        force["energy"] / forces_solvent[i]["energy"], tolerance
+                    )
+                    == 1.0
+                )
 
+        # check E_solute_scaled
+        assert (
+            pytest.approx(
+                (
+                    (forces_rest2_new[4]["energy"] + solute_force_new[2]["energy"])
+                    / scale
+                )
+                / E_solute_scaled_new,
+                tolerance,
+            )
+            == 1.0
+        )
+        # check E_solute_not_scaled
+        assert (
+            pytest.approx(
+                (
+                    forces_rest2_new[5]["energy"]
+                    + solute_force_new[0]["energy"]
+                    + solute_force_new[1]["energy"]
+                )
+                / E_solute_not_scaled_new,
+                tolerance,
+            )
+            == 1.0
+        )
+        # check E_solute
+        Correct_E_solute = (
+            forces_rest2_new[4]["energy"]
+            + forces_rest2_new[5]["energy"]
+            + solute_force_new[0]["energy"]
+            + solute_force_new[1]["energy"]
+            + solute_force_new[2]["energy"]
+        )
+        assert (
+            pytest.approx(
+                (E_solute_scaled_new * scale + E_solute_not_scaled_new)
+                / Correct_E_solute,
+                tolerance,
+            )
+            == 1.0
+        )
+        # check E_solvent
+        assert (
+            pytest.approx((E_solvent_new) / solvent_force_new[6]["energy"], tolerance)
+            == 1.0
+        )
+        # check E_solvent_solute_nb
+        assert (
+            pytest.approx(
+                (
+                    forces_rest2_new[2]["energy"]
+                    - solvent_force_new[2]["energy"]
+                    - solute_force_new[2]["energy"]
+                )
+                / (scale**0.5 * solvent_solute_nb_new),
+                tolerance,
+            )
+            == 1.0
+        )

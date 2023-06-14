@@ -66,18 +66,17 @@ from SST2.rest2 import run_rest2
 class SST2Reporter(object):
     def __init__(self, sst2):
         self.sst2 = sst2
+
     def describeNextReport(self, simulation):
         sst2 = self.sst2
         steps1 = (
-            sst2.tempChangeInterval
-            - simulation.currentStep % sst2.tempChangeInterval
+            sst2.tempChangeInterval - simulation.currentStep % sst2.tempChangeInterval
         )
-        steps2 = (
-            sst2.reportInterval - simulation.currentStep % sst2.reportInterval
-        )
+        steps2 = sst2.reportInterval - simulation.currentStep % sst2.reportInterval
         steps = min(steps1, steps2)
         isUpdateAttempt = steps1 == steps
         return (steps, False, isUpdateAttempt, False, isUpdateAttempt)
+
     def report(self, simulation, state):
         st = self.sst2
         energie_group = st.rest2.compute_all_energies()
@@ -101,9 +100,8 @@ class SST2Reporter(object):
         if simulation.currentStep % st.reportInterval == 0:
             st._writeReport(energie_group)
         if simulation.currentStep % st.tempChangeInterval == 0:
-            st._attemptTemperatureChange(
-                state, energie_group[0], energie_group[3]
-            )
+            st._attemptTemperatureChange(state, energie_group[0], energie_group[3])
+
 
 class SST2(object):
     """SimulatedTempering implements the simulated tempering algorithm for
@@ -158,7 +156,7 @@ class SST2(object):
         The REST2 object defining the System, Context, and Integrator to use
     simulation: Simulation
         The Simulation defining the System, Context, and Integrator to use
-    
+
     Methods
     -------
     step(steps)
@@ -174,8 +172,8 @@ class SST2(object):
         tempChangeInterval=25,
         reportInterval=1000,
         reportFile=stdout,
-        restart_file=None,
-        restart_file_full=None,
+        restart_files=None,
+        restart_files_full=None,
     ):
         """Create a new SimulatedTempering.
 
@@ -195,6 +193,10 @@ class SST2(object):
             The interval (in time steps) at which to write information to the report file
         reportFile: string or file
             The file to write reporting information to, specified as a file name or file object
+        restart_files: list of strings
+            Files to read restart information to, specified as a file name
+        restart_files_full: string
+            Full Rest2 files to read restart information to, specified as a file name
         """
         self.rest2 = rest2
         self.simulation = rest2.simulation
@@ -261,83 +263,24 @@ class SST2(object):
         # Initialize the weights.
 
         if weights is None:
-            self._e_num = [0] * numTemperatures
-            self._e_solute_avg = [0.0 * unit.kilojoule / unit.mole] * numTemperatures
-            self._e_solute_solv_avg = [
-                0.0 * unit.kilojoule / unit.mole
-            ] * numTemperatures
-            self._weights = [0.0] * numTemperatures
+            first_temp_index = self.compute_starting_weight(
+                restart_files, restart_files_full
+            )
             self._updateWeights = True
-
-            # For restart, weight should be recomputed based on previous results
-            if restart_file is not None and restart_file_full is not None:
-                df_sim = pd.read_csv(restart_file[0])
-                df_temp = pd.read_csv(restart_file_full[0])
-
-                for i in range(1, len(restart_file)):
-                    logger.info(f"Reading part {i}")
-                    df_sim_part = pd.read_csv(restart_file[i])
-                    df_temp_part = pd.read_csv(restart_file_full[i])
-
-                    df_sim = (
-                        pd.concat([df_sim, df_sim_part], axis=0, join="outer")
-                        .reset_index()
-                        .drop(["index"], axis=1)
-                    )
-                    df_temp = (
-                        pd.concat([df_temp, df_temp_part], axis=0, join="outer")
-                        .reset_index()
-                        .drop(["index"], axis=1)
-                    )
-
-                # Remove Nan rows (rare cases of crashes)
-                df_sim = df_sim[df_sim.iloc[:, 0].notna()]
-                df_sim["Temperature (K)"] = df_temp["Aim Temp (K)"]
-                temp_array = df_sim["Temperature (K)"].unique()
-                temp_array.sort()
-                logger.info(temp_array)
-
-                # Remove Nan rows (rare cases of crashes)
-                df_temp = df_temp[df_temp.iloc[:, 0].notna()]
-
-                for temp_index, temp in enumerate(temp_array):
-                    df_local = df_temp[df_temp["Aim Temp (K)"] == temp]
-                    self._e_num[temp_index] = len(df_local)
-                    self._e_solute_avg[temp_index] = (
-                        df_local["E solute scaled (kJ/mole)"].mean()
-                        * unit.kilojoule
-                        / unit.mole
-                    )
-                    self._e_solute_solv_avg[temp_index] = (
-                        df_local["E solvent-solute (kJ/mole)"].mean()
-                        * unit.kilojoule
-                        / unit.mole
-                    )
-
-                first_temp_index = 0
-                for index, row in df_sim.iloc[::-1].iterrows():
-                    if index % (50 * 10) == 0:
-                        temp_index = np.where(temp_array == row["Temperature (K)"])[0][
-                            0
-                        ]
-                        first_temp_index = temp_index
-                        break
-
-                logger.info(self._e_num)
-                logger.info(self._e_solute_avg)
-                logger.info(self._e_solute_solv_avg)
-                logger.info(f"last temperature = {temp_array[first_temp_index]}")
-
         else:
             self._weights = weights
             self._updateWeights = False
 
         # Select the initial temperature.
-
-        if restart_file is None:
+        if restart_files is None:
             self.currentTemperature = 0
-        else:
+        elif weights is None:
             self.currentTemperature = first_temp_index
+        else:
+            # Need to treat the case where weights is not None and restart_files is not None
+            # This is BAD MOKAY !!!!! :
+            self.currentTemperature = 0
+
         # print(self.temperatures[self.currentTemperature])
         # self.simulation.integrator.setTemperature(self.temperatures[self.currentTemperature])
         self.rest2.scale_nonbonded_torsion(
@@ -345,7 +288,6 @@ class SST2(object):
             / self.temperatures[self.currentTemperature]
         )
         # Add a reporter to the simulation which will handle the updates and reports.
-
         self.simulation.reporters.append(SST2Reporter(self))
 
         # Write out the header line.
@@ -359,6 +301,79 @@ class SST2(object):
             "E solvent-solute (kJ/mole)",
         ]
         print('"%s"' % ('","').join(headers), file=self._out)
+
+    def compute_starting_weight(self, restart_files, restart_files_full):
+        """Compute the weight factor for each temperature.
+
+        Parameters
+        ----------
+        restart_files: list of strings
+            Files to read restart information to, specified as a file name
+        restart_files_full: string
+            Full Rest2 files to read restart information to, specified as a file name
+        """
+        numTemperatures = len(self.temperatures)
+        # Initialize the energy arrays.
+        self._e_num = [0] * numTemperatures
+        self._e_solute_avg = [0.0 * unit.kilojoules_per_mole] * numTemperatures
+        self._e_solute_solv_avg = [0.0 * unit.kilojoules_per_mole] * numTemperatures
+        self._weights = [0.0] * numTemperatures
+
+        # For restart, weight should be recomputed based on previous results
+        if restart_files is not None and restart_files_full is not None:
+            df_sim = pd.read_csv(restart_files[0])
+            df_temp = pd.read_csv(restart_files_full[0])
+
+            for i in range(1, len(restart_files)):
+                logger.info(f"Reading part {i}")
+                df_sim_part = pd.read_csv(restart_files[i])
+                df_temp_part = pd.read_csv(restart_files_full[i])
+
+                df_sim = (
+                    pd.concat([df_sim, df_sim_part], axis=0, join="outer")
+                    .reset_index()
+                    .drop(["index"], axis=1)
+                )
+                df_temp = (
+                    pd.concat([df_temp, df_temp_part], axis=0, join="outer")
+                    .reset_index()
+                    .drop(["index"], axis=1)
+                )
+
+            # Remove Nan rows (rare cases of crashes)
+            df_sim = df_sim[df_sim.iloc[:, 0].notna()]
+            df_sim["Temperature (K)"] = df_temp["Aim Temp (K)"]
+            temp_array = df_sim["Temperature (K)"].unique()
+            temp_array.sort()
+            logger.info(temp_array)
+
+            # Remove Nan rows (rare cases of crashes)
+            df_temp = df_temp[df_temp.iloc[:, 0].notna()]
+
+            for temp_index, temp in enumerate(temp_array):
+                df_local = df_temp[df_temp["Aim Temp (K)"] == temp]
+                self._e_num[temp_index] = len(df_local)
+                self._e_solute_avg[temp_index] = (
+                    df_local["E solute scaled (kJ/mole)"].mean()
+                    * unit.kilojoules_per_mole
+                )
+                self._e_solute_solv_avg[temp_index] = (
+                    df_local["E solvent-solute (kJ/mole)"].mean()
+                    * unit.kilojoules_per_mole
+                )
+
+            first_temp_index = 0
+            for index, row in df_sim.iloc[::-1].iterrows():
+                if index % (50 * 10) == 0:
+                    temp_index = np.where(temp_array == row["Temperature (K)"])[0][0]
+                    first_temp_index = temp_index
+                    break
+
+            logger.info(self._e_num)
+            logger.info(self._e_solute_avg)
+            logger.info(self._e_solute_solv_avg)
+            logger.info(f"last temperature = {temp_array[first_temp_index]}")
+            return first_temp_index
 
     def _writeReport(self, energie_group):
         """Write out a line to the report."""
@@ -400,9 +415,6 @@ class SST2(object):
             avg_ener_solut = self._e_solute_avg[i]
             avg_ener_solut_solv = self._e_solute_solv_avg[i]
 
-        # avg_ener_solut *= unit.kilojoule / unit.mole
-        # avg_ener_solut_solv *= unit.kilojoule / unit.mole
-
         weight = (
             self.inverseTemperatures[j] - self.inverseTemperatures[i]
         ) * avg_ener_solut
@@ -435,12 +447,10 @@ class SST2(object):
 
         logProbability = []
         # Compute Delta_(i,j) = (Bi-Bj)Epp + ((BrefBi)**0.5 - (BrefBj)**0.5)Epw - (fi-fj)
-        # print(temp_i, temp_list)
         for j in temp_list:
             log_prob = (
                 self.inverseTemperatures[temp_i] - self.inverseTemperatures[j]
             ) * ener_solut
-            # print('logprob 1 =', log_prob)
             log_prob += (
                 (
                     self.inverseTemperatures[temp_i]
@@ -453,56 +463,32 @@ class SST2(object):
                 )
                 ** 0.5
             ) * ener_solut_solv
-            # print('logprob 2 =', log_prob)
             weight = self._compute_weight(temp_i, j)
             log_prob += weight
-            # print('logprob 3 =', log_prob, weight)
             logProbability.append(log_prob)
-            # print(temp_i, j, log_prob)
 
-        # print('Proba:', probability)
         probability = [np.exp(x) for x in logProbability]
-        # print('New Proba:', probability)
-        # print('Temp list', temp_list)
 
-        # To avoid trying i-1 in first
-        # I add a random on which temp index to test
-        # First.
+        # To avoid trying always i-1 in first
+        # add a random on which temp index to test first.
         # Might need to compute the combinatory of p(i-1), p(i+1)
         # to compute p(i)
         index_list = list(range(len(temp_list)))
-        # print(index_list)
         random.shuffle(index_list)
-        # print(index_list)
 
         for i in index_list:
             r = random.random()
 
             if r < probability[i]:
                 # print(f"SWITCH {self.currentTemperature:2} -> {temp_list[i]:2}")
-                # Rescale the velocities.
-                # scale = math.sqrt(self.temperatures[i]/self.temperatures[self.currentTemperature])
-                # if have_numpy:
-                #     velocities = scale*state.getVelocities(asNumpy=True).value_in_unit(unit.nanometers/unit.picoseconds)
-                # else:
-                #     velocities = [v*scale for v in state.getVelocities().value_in_unit(unit.nanometers/unit.picoseconds)]
-                # self.simulation.context.setVelocities(velocities)
-
-                # Select this temperature.
-
+                # Select the new temperature.
                 self.currentTemperature = temp_list[i]
                 # self.simulation.integrator.setTemperature(self.temperatures[i])
                 self.rest2.scale_nonbonded_torsion(
                     self.temperatures[self.temp_ref_index]
                     / self.temperatures[temp_list[i]]
                 )
-
                 break
-
-
-# -651.2058710416085 kJ/mol -2082.3374353838976 kJ/mol
-# [-774.0805157886525, -746.9156031589454, -745.8530421384646, -734.1762990186642, -711.7915332524436, -729.9946964283761, -694.0997403755065, -663.2442182707645, 0.0, 0.0]
-# [-2437.0540461474134, -2362.545113976842, -2297.780046082346, -2252.782031692964, -2202.961638364378, -2094.6851449334276, -2016.3382915321304, -2031.4306585449015, 0.0, 0.0]
 
 
 def run_sst2(
@@ -565,8 +551,8 @@ def run_sst2(
     ), f"Reference temperature {ref_temp} not in temperatures_list {temperatures}"
 
     report_sst2 = f"{generic_name}_sst2_full.csv"
-    restart_file = None
-    restart_file_full = None
+    restart_files = None
+    restart_files_full = None
     tot_steps = np.ceil(tot_steps)
 
     if not overwrite and os.path.isfile(report_sst2):
@@ -579,21 +565,21 @@ def run_sst2(
         report_sst2 = f"{generic_name}_sst2_full_part_{part}.csv"
         report_simple_sst2 = f"{generic_name}_sst2_part_{part}.csv"
 
-        restart_file = [f"{generic_name}_sst2.csv"]
-        restart_file_full = [f"{generic_name}_sst2_full.csv"]
+        restart_files = [f"{generic_name}_sst2.csv"]
+        restart_files_full = [f"{generic_name}_sst2_full.csv"]
 
         while os.path.isfile(report_sst2):
-            restart_file.append(report_simple_sst2)
-            restart_file_full.append(report_sst2)
+            restart_files.append(report_simple_sst2)
+            restart_files_full.append(report_sst2)
             report_sst2 = f"{generic_name}_sst2_full_part_{part}.csv"
             report_simple_sst2 = f"{generic_name}_sst2_part_{part}.csv"
             part += 1
 
         if part != 2:
-            restart_file = restart_file[:-1]
-            restart_file_full = restart_file_full[:-1]
+            restart_files = restart_files[:-1]
+            restart_files_full = restart_files_full[:-1]
 
-        logger.info(f"Using restart file : {restart_file}")
+        logger.info(f"Using restart file : {restart_files}")
 
     sys_rest2.simulation.reporters = []
     sys_rest2.simulation.currentStep = 0
@@ -605,8 +591,8 @@ def run_sst2(
         tempChangeInterval=tempChangeInterval,
         reportFile=report_sst2,
         reportInterval=reportInterval,
-        restart_file=restart_file,
-        restart_file_full=restart_file_full,
+        restart_files=restart_files,
+        restart_files_full=restart_files_full,
     )
 
     logger.info(f"- Launch SST2")

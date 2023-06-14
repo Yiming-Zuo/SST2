@@ -708,7 +708,6 @@ class REST2:
                 i, q * np.sqrt(scale), sigma, eps * scale
             )
 
-
         for i in range(len(self.init_nb_exept_index)):
             index = self.init_nb_exept_index[i]
             p1, p2, q, sigma, eps = self.init_nb_exept_value[i]
@@ -728,9 +727,9 @@ class REST2:
 
         nonbonded_force = self.system_forces_solute["NonbondedForce"]
 
-        #assert len(self.init_nb_param) == nonbonded_force.getNumParticles()
+        # assert len(self.init_nb_param) == nonbonded_force.getNumParticles()
 
-        #for i in range(nonbonded_force.getNumParticles()):
+        # for i in range(nonbonded_force.getNumParticles()):
         for i, index in enumerate(self.solute_index):
             q, sigma, eps = self.init_nb_param[index]
             # To check we are looking at the right particles
@@ -741,7 +740,7 @@ class REST2:
             nonbonded_force.setParticleParameters(
                 i, q * np.sqrt(scale), sigma, eps * scale
             )
-        #for particle_index in range(4):
+        # for particle_index in range(4):
         #    [charge, sigma, epsilon] = nonbonded_force.getParticleParameters(
         #        particle_index
         #    )
@@ -749,13 +748,13 @@ class REST2:
 
         for i in range(nonbonded_force.getNumExceptions()):
             p1, p2, q, sigma, eps = self.init_nb_exept_solute_value[i]
-            #if i in [11, 12, 13, 14, 15, 16]:
+            # if i in [11, 12, 13, 14, 15, 16]:
             #    print(i, p1, p2, q, sigma, eps)
             nonbonded_force.setExceptionParameters(
                 i, p1, p2, q * scale, sigma, eps * scale
             )
 
-        #for exception_index in [11, 12, 13, 14, 15, 16]:
+        # for exception_index in [11, 12, 13, 14, 15, 16]:
         #    [
         #        iatom,
         #        jatom,
@@ -764,7 +763,6 @@ class REST2:
         #        epsilon,
         #    ] = nonbonded_force.getExceptionParameters(exception_index)
         #    print(exception_index, iatom, jatom, chargeprod, sigma, epsilon)
-
 
         # Need to fix simulation
         nonbonded_force.updateParametersInContext(self.simulation_solute.context)
@@ -828,7 +826,9 @@ class REST2:
                 E_solute_scaled += force["energy"]
                 solute_torsion_scaled_flag = False
                 solute_torsion_not_scaled_flag = True
-            elif force["name"] == "CustomTorsionForce" and solute_torsion_not_scaled_flag:
+            elif (
+                force["name"] == "CustomTorsionForce" and solute_torsion_not_scaled_flag
+            ):
                 E_solute_not_scaled += force["energy"]
                 solute_torsion_not_scaled_flag = False
 
@@ -851,6 +851,7 @@ class REST2:
         E_solute_scaled, _, _, solvent_solute_nb = self.compute_all_energies()
 
         return E_solute_scaled + 0.5 * (1 / self.scale) ** 0.5 * solvent_solute_nb
+
 
 def run_rest2(
     sys_rest2,

@@ -252,19 +252,21 @@ if __name__ == "__main__":
     save_check_steps = 500.0 * unit.nanoseconds / dt
     print(f"Save checkpoint every {save_check_steps} steps")
 
-    temp_list = compute_temperature_list(minTemperature, maxTemperature, numTemperatures, refTemperature=None)
+    temp_list = compute_temperature_list(
+        minTemperature=args.min_temp,
+        maxTemperature=args.last_temp,
+        numTemperatures=ladder_num,
+        refTemperature=args.ref_temp)
     print(temp_list)
+
 
     run_sst2(
         sys_rest2,
         f"{OUT_PATH}/{name}",
         tot_steps,
         dt=dt,
-        temperatures=temperatures,
-        numTemperatures=ladder_num,
-        min_temp=args.min_temp,
+        temperatures=temp_list,
         ref_temp=args.ref_temp,
-        max_temp=args.last_temp,
         save_step_dcd=save_step_dcd,
         save_step_log=save_step_log,
         save_step_rest2=save_step_log,
@@ -272,6 +274,7 @@ if __name__ == "__main__":
         reportInterval=save_step_log,
         overwrite=False,
         save_checkpoint_steps=save_check_steps)
+    
 
 """
 vmd test_2HPL/2HPL_em_water.pdb test_2HPL/2HPL_equi_water.dcd -m 2HPL.pdb

@@ -195,9 +195,16 @@ def implicit_sim(
     )
 
 
-def create_water_box(in_pdb, out_pdb, pad, forcefield,
-    ionicStrength=0.15 * unit.molar, positiveIon="Na+", negativeIon="Cl-",
-    overwrite=False):
+def create_water_box(
+    in_pdb,
+    out_pdb,
+    pad,
+    forcefield,
+    ionicStrength=0.15 * unit.molar,
+    positiveIon="Na+",
+    negativeIon="Cl-",
+    overwrite=False,
+):
     """Add a water box around a prepared pdb file.
 
     Parameters
@@ -244,10 +251,11 @@ def create_water_box(in_pdb, out_pdb, pad, forcefield,
     boxVectors = [(maxSize + geompadding) * v for v in vectors]
     modeller.addSolvent(
         forcefield,
-        boxVectors=boxVectors, 
+        boxVectors=boxVectors,
         ionicStrength=ionicStrength,
         positiveIon=positiveIon,
-        negativeIon=negativeIon)
+        negativeIon=negativeIon,
+    )
 
     with open(out_pdb, "w") as filout:
         app.PDBFile.writeFile(modeller.topology, modeller.positions, filout, True)
@@ -342,8 +350,6 @@ def create_sim_system(pdb, forcefield, temp=300, h_mass=1.5, base_force_group=1)
         hydrogenMass = h_mass * unit.amu
 
     nonbondedCutoff = 1.0 * unit.nanometers
-    
-
 
     # Integration Options
 
