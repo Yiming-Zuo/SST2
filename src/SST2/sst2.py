@@ -63,6 +63,48 @@ logger = logging.getLogger(__name__)
 from SST2.rest2 import run_rest2
 
 
+class SST2Reporter(object):
+    def __init__(self, sst2):
+        self.sst2 = sst2
+    def describeNextReport(self, simulation):
+        sst2 = self.sst2
+        steps1 = (
+            sst2.tempChangeInterval
+            - simulation.currentStep % sst2.tempChangeInterval
+        )
+        steps2 = (
+            sst2.reportInterval - simulation.currentStep % sst2.reportInterval
+        )
+        steps = min(steps1, steps2)
+        isUpdateAttempt = steps1 == steps
+        return (steps, False, isUpdateAttempt, False, isUpdateAttempt)
+    def report(self, simulation, state):
+        st = self.sst2
+        energie_group = st.rest2.compute_all_energies()
+        # energie = st.rest2.get_customPotEnergie()
+        # E = Bi*Epp + (B0Bi)**0.5 Epw
+        # print(energie_group)
+        # energie = self.sst2.inverseTemperatures[self.sst2.currentTemperature] * energie_group[0] +\
+        #    (self.sst2.inverseTemperatures[self.sst2.currentTemperature]*self.sst2.inverseTemperatures[0])**0.5 * energie_group[2]
+        # energie *= unit.kilojoule / unit.mole
+        # print('Energie', energie)
+        st._e_num[st.currentTemperature] += 1
+        st._e_solute_avg[st.currentTemperature] += (
+            energie_group[0] - st._e_solute_avg[st.currentTemperature]
+        ) / st._e_num[st.currentTemperature]
+        st._e_solute_solv_avg[st.currentTemperature] += (
+            energie_group[3] - st._e_solute_solv_avg[st.currentTemperature]
+        ) / st._e_num[st.currentTemperature]
+        # print(energie_group[0], energie_group[3])
+        # print([ener._value for ener in st._e_solute_avg])
+        # print([ener._value for ener in st._e_solute_solv_avg])
+        if simulation.currentStep % st.reportInterval == 0:
+            st._writeReport(energie_group)
+        if simulation.currentStep % st.tempChangeInterval == 0:
+            st._attemptTemperatureChange(
+                state, energie_group[0], energie_group[3]
+            )
+
 class SST2(object):
     """SimulatedTempering implements the simulated tempering algorithm for
     accelerated sampling.
@@ -304,55 +346,6 @@ class SST2(object):
         )
         # Add a reporter to the simulation which will handle the updates and reports.
 
-        class SST2Reporter(object):
-            def __init__(self, sst2):
-                self.sst2 = sst2
-
-            def describeNextReport(self, simulation):
-                sst2 = self.sst2
-                steps1 = (
-                    sst2.tempChangeInterval
-                    - simulation.currentStep % sst2.tempChangeInterval
-                )
-                steps2 = (
-                    sst2.reportInterval - simulation.currentStep % sst2.reportInterval
-                )
-                steps = min(steps1, steps2)
-                isUpdateAttempt = steps1 == steps
-                return (steps, False, isUpdateAttempt, False, isUpdateAttempt)
-
-            def report(self, simulation, state):
-                st = self.sst2
-
-                energie_group = st.rest2.compute_all_energies()
-
-                # energie = st.rest2.get_customPotEnergie()
-                # E = Bi*Epp + (B0Bi)**0.5 Epw
-                # print(energie_group)
-                # energie = self.sst2.inverseTemperatures[self.sst2.currentTemperature] * energie_group[0] +\
-                #    (self.sst2.inverseTemperatures[self.sst2.currentTemperature]*self.sst2.inverseTemperatures[0])**0.5 * energie_group[2]
-                # energie *= unit.kilojoule / unit.mole
-                # print('Energie', energie)
-
-                st._e_num[st.currentTemperature] += 1
-                st._e_solute_avg[st.currentTemperature] += (
-                    energie_group[0] - st._e_solute_avg[st.currentTemperature]
-                ) / st._e_num[st.currentTemperature]
-                st._e_solute_solv_avg[st.currentTemperature] += (
-                    energie_group[3] - st._e_solute_solv_avg[st.currentTemperature]
-                ) / st._e_num[st.currentTemperature]
-
-                # print(energie_group[0], energie_group[3])
-                # print([ener._value for ener in st._e_solute_avg])
-                # print([ener._value for ener in st._e_solute_solv_avg])
-
-                if simulation.currentStep % st.reportInterval == 0:
-                    st._writeReport(energie_group)
-                if simulation.currentStep % st.tempChangeInterval == 0:
-                    st._attemptTemperatureChange(
-                        state, energie_group[0], energie_group[3]
-                    )
-
         self.simulation.reporters.append(SST2Reporter(self))
 
         # Write out the header line.
@@ -391,7 +384,7 @@ class SST2(object):
         self.simulation.step(steps)
 
     def _compute_weight(self, i, j):
-        """Compute the difference of weight $w_j - w_i$
+        r"""Compute the difference of weight $w_j - w_i$
         using the following equation:
 
         $$(w_j - w_i) = (\beta_j - \beta_i) \frac{ (\braket{E_{pp}^{(1)}}_i -  \braket{E_{pp}^{(1)}}_j)}{2} +  (\sqrt{\beta_{ref} \beta_j} - \sqrt{\beta_{ref} \beta_i}) \frac {(\braket{E_{pw}}_i - \braket{E_{pw}}_j)}{2}$$
