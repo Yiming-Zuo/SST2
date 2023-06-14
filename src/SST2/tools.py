@@ -195,7 +195,9 @@ def implicit_sim(
     )
 
 
-def create_water_box(in_pdb, out_pdb, pad, forcefield, overwrite=False):
+def create_water_box(in_pdb, out_pdb, pad, forcefield,
+    ionicStrength=0.15 * unit.molar, positiveIon="Na+", negativeIon="Cl-",
+    overwrite=False):
     """Add a water box around a prepared pdb file.
 
     Parameters
@@ -208,6 +210,12 @@ def create_water_box(in_pdb, out_pdb, pad, forcefield, overwrite=False):
         Padding around the peptide in nm
     forcefield : openmm ForceField
         forcefield object
+    ionicStrength : unit.Quantity
+        Ionic strength of the system, default is 0.15 M
+    positiveIon : str
+        Positive ion, default is Na+
+    negativeIon : str
+        Negative ion, default is Cl-
     overwrite : bool
         Overwrite the output file, default is False
     """
@@ -234,7 +242,12 @@ def create_water_box(in_pdb, out_pdb, pad, forcefield, overwrite=False):
         openmm.Vec3(-1 / 3, unit.sqrt(2) / 3, unit.sqrt(6) / 3),
     ]
     boxVectors = [(maxSize + geompadding) * v for v in vectors]
-    modeller.addSolvent(forcefield, boxVectors=boxVectors)
+    modeller.addSolvent(
+        forcefield,
+        boxVectors=boxVectors, 
+        ionicStrength=ionicStrength,
+        positiveIon=positiveIon,
+        negativeIon=negativeIon)
 
     with open(out_pdb, "w") as filout:
         app.PDBFile.writeFile(modeller.topology, modeller.positions, filout, True)
@@ -244,7 +257,7 @@ def create_water_box(in_pdb, out_pdb, pad, forcefield, overwrite=False):
 
 
 def create_system_simulation(
-    pdb_file,
+    pdb_file_io,
     forcefield,
     dt=2 * unit.femtosecond,
     temperature=300 * unit.kelvin,
@@ -261,8 +274,8 @@ def create_system_simulation(
 
     Parameters
     ----------
-    pdb_file : str
-        Path to the pdb file
+    pdb_file : str or StringIO
+        Path or StringIO of the pdb file
     forcefield : Openmm forcefield
         forcefield object
     dt : unit.Quantity
@@ -294,7 +307,7 @@ def create_system_simulation(
         Simulation object
     """
 
-    pdb = app.PDBFile(pdb_file)
+    pdb = app.PDBFile(pdb_file_io)
 
     integrator = openmm.LangevinMiddleIntegrator(temperature, friction, dt)
 
@@ -319,11 +332,18 @@ def create_sim_system(pdb, forcefield, temp=300, h_mass=1.5, base_force_group=1)
     # System Configuration
 
     nonbondedMethod = app.PME
-    nonbondedCutoff = 1.0 * unit.nanometers
     ewaldErrorTolerance = 0.0005
     constraints = app.HBonds
     rigidWater = True
-    hydrogenMass = h_mass * unit.amu
+
+    if unit.is_quantity(h_mass):
+        hydrogenMass = h_mass.in_units_of(unit.amu)
+    else:
+        hydrogenMass = h_mass * unit.amu
+
+    nonbondedCutoff = 1.0 * unit.nanometers
+    
+
 
     # Integration Options
 

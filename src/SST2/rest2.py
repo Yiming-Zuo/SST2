@@ -62,8 +62,13 @@ class Rest2Reporter(object):
 
     def report(self, simulation, state):
         """Generate a report.
-        Compute the energies of the solute and solvent and write them to the
-        file (`self._out`).
+        Compute the energies of:
+        - the solute scaled
+        - the solute not scaled
+        - the solvent
+        - the solute-solvent
+
+        Then write them to the file (`self._out`).
 
         Parameters
         ----------
@@ -174,6 +179,14 @@ class REST2:
     ):
         """Initialize the REST2 class
 
+        To initialize the REST2 class, the following steps are performed:
+        - Extract solute nonbonded index and values
+        - Separate solute's torsions from the solvent
+        - Extract solute's torsions index and values
+        - Create separate solute and solvent simulations
+        - Extract solute's nonbonded index and values from the solute_only system
+        - Setup simulation
+
         Parameters
         ----------
         system : System
@@ -210,8 +223,6 @@ class REST2:
             The Ewald error tolerance of the system, default is 0.0005
         hydrogenMass : float
             The hydrogen mass of the system, default is 1 amu
-
-
         """
 
         self.system = system
@@ -472,15 +483,13 @@ class REST2:
     def create_solute_solvent_simulation(
         self,
         forcefield,
-        solute_out_pdb="solute.pdb",
-        solvent_out_pdb="solvent.pdb",
         nonbondedMethod=app.PME,
         nonbondedCutoff=1 * unit.nanometers,
         constraints=app.HBonds,
         platform_name="CUDA",
         rigidWater=True,
         ewaldErrorTolerance=0.0005,
-        hydrogenMass=3.0 * unit.amu,
+        hydrogenMass=1.0 * unit.amu,
         friction=1 / unit.picoseconds,
         dt=2 * unit.femtosecond,
     ):
@@ -491,10 +500,6 @@ class REST2:
         ----------
         forcefield : str
             Forcefield name
-        solute_out_pdb : str
-            Output pdb file name for solute, default is "solute.pdb"
-        solvent_out_pdb : str
-            Output pdb file name for solvent, default is "solvent.pdb"
         nonbondedMethod : Nonbonded Method
             Nonbonded method, default is app.PME
         nonbondedCutoff : float * unit.nanometers
@@ -502,6 +507,17 @@ class REST2:
         constraints : Constraints
             Constraints
         platform_name : str
+            Platform name, default is CUDA
+        rigidWater : bool
+            Rigid water, default is True
+        ewaldErrorTolerance : float
+            Ewald error tolerance, default is 0.0005
+        hydrogenMass : float * unit.amu
+            Hydrogen mass, default is 1.0 * unit.amu
+        friction : float / unit.picoseconds
+            Friction, default is 1 / unit.picoseconds
+        dt : float * unit.femtosecond
+            Time step, default is 2 * unit.femtosecond
 
         """
 
@@ -526,10 +542,14 @@ class REST2:
 
         # Separate coordinates in two pdb files:
         solute_coor = solute_solvent_coor.select_index(self.solute_index)
-        solute_coor.write(solute_out_pdb, overwrite=True)
+        # solute_coor.write(solute_out_pdb, overwrite=True)
+        # To avoid saving a temporary file, we use StringIO
+        solute_out_pdb = StringIO(pdb_numpy.format.pdb.get_pdb_string(solute_coor))
 
         solvent_coor = solute_solvent_coor.select_index(self.solvent_index)
-        solvent_coor.write(solvent_out_pdb, overwrite=True)
+        # solvent_coor.write(solvent_out_pdb, overwrite=True)
+        # To avoid saving a temporary file, we use StringIO
+        solvent_out_pdb = StringIO(pdb_numpy.format.pdb.get_pdb_string(solvent_coor))
 
         # Create system and simulations:
         self.system_solute, self.simulation_solute = create_system_simulation(
@@ -688,12 +708,14 @@ class REST2:
                 i, q * np.sqrt(scale), sigma, eps * scale
             )
 
+
         for i in range(len(self.init_nb_exept_index)):
             index = self.init_nb_exept_index[i]
             p1, p2, q, sigma, eps = self.init_nb_exept_value[i]
             nonbonded_force.setExceptionParameters(
                 index, p1, p2, q * scale, sigma, eps * scale
             )
+
         # Need to fix simulation
         nonbonded_force.updateParametersInContext(self.simulation.context)
 
@@ -706,17 +728,44 @@ class REST2:
 
         nonbonded_force = self.system_forces_solute["NonbondedForce"]
 
-        for i in range(len(self.solute_index)):
-            q, sigma, eps = self.init_nb_param[i]
+        #assert len(self.init_nb_param) == nonbonded_force.getNumParticles()
+
+        #for i in range(nonbonded_force.getNumParticles()):
+        for i, index in enumerate(self.solute_index):
+            q, sigma, eps = self.init_nb_param[index]
+            # To check we are looking at the right particles
+            # q_old, sigma_old, eps_old = nonbonded_force.getParticleParameters(i)
+            # if i < 4:
+            #     print(f"{index}  {q}, {sigma}, {eps}")
+            #     print(f"{i}  {q_old}, {sigma_old}, {eps_old}")
             nonbonded_force.setParticleParameters(
                 i, q * np.sqrt(scale), sigma, eps * scale
             )
+        #for particle_index in range(4):
+        #    [charge, sigma, epsilon] = nonbonded_force.getParticleParameters(
+        #        particle_index
+        #    )
+        #    print(f"{particle_index}  {charge}, {sigma}, {epsilon}")
 
-        for i in range(len(self.init_nb_exept_index)):
+        for i in range(nonbonded_force.getNumExceptions()):
             p1, p2, q, sigma, eps = self.init_nb_exept_solute_value[i]
+            #if i in [11, 12, 13, 14, 15, 16]:
+            #    print(i, p1, p2, q, sigma, eps)
             nonbonded_force.setExceptionParameters(
                 i, p1, p2, q * scale, sigma, eps * scale
             )
+
+        #for exception_index in [11, 12, 13, 14, 15, 16]:
+        #    [
+        #        iatom,
+        #        jatom,
+        #        chargeprod,
+        #        sigma,
+        #        epsilon,
+        #    ] = nonbonded_force.getExceptionParameters(exception_index)
+        #    print(exception_index, iatom, jatom, chargeprod, sigma, epsilon)
+
+
         # Need to fix simulation
         nonbonded_force.updateParametersInContext(self.simulation_solute.context)
 
@@ -775,11 +824,11 @@ class REST2:
                 all_nb = force["energy"]
             # Torsion flag to get first component of dihedral
             # forces (the solute one)
-            if force["name"] == "CustomTorsionForce" and solute_torsion_scaled_flag:
+            elif force["name"] == "CustomTorsionForce" and solute_torsion_scaled_flag:
                 E_solute_scaled += force["energy"]
                 solute_torsion_scaled_flag = False
                 solute_torsion_not_scaled_flag = True
-            if force["name"] == "CustomTorsionForce" and solute_torsion_not_scaled_flag:
+            elif force["name"] == "CustomTorsionForce" and solute_torsion_not_scaled_flag:
                 E_solute_not_scaled += force["energy"]
                 solute_torsion_not_scaled_flag = False
 
@@ -802,486 +851,6 @@ class REST2:
         E_solute_scaled, _, _, solvent_solute_nb = self.compute_all_energies()
 
         return E_solute_scaled + 0.5 * (1 / self.scale) ** 0.5 * solvent_solute_nb
-
-    ###################################
-    ########## OLD FUNCTIONS ##########
-    ###################################
-
-    def separate_angle_pot(self):
-        """Useless in the REST2 case as solute potential energy
-        is obtain from the solute only system.
-        """
-
-        energy_expression = "(k/2)*(theta-theta0)^2;"
-
-        # Create the Solvent bond
-        solvent_angle_force = openmm.CustomAngleForce(energy_expression)
-        solvent_angle_force.addPerAngleParameter("theta0")
-        solvent_angle_force.addPerAngleParameter("k")
-
-        # Create the Solute bond
-        solute_angle_force = openmm.CustomAngleForce(energy_expression)
-        solute_angle_force.addPerAngleParameter("theta0")
-        solute_angle_force.addPerAngleParameter("k")
-
-        original_angle_force = self.system_forces["HarmonicAngleForce"]
-
-        for i in range(original_angle_force.getNumAngles()):
-            p1, p2, p3, theta0, k = original_angle_force.getAngleParameters(i)
-            if (
-                p1 in self.solute_index
-                and p2 in self.solute_index
-                and p3 in self.solute_index
-            ):
-                solute_angle_force.addAngle(p1, p2, p3, [theta0, k])
-            elif (
-                p1 not in self.solute_index
-                and p2 not in self.solute_index
-                and p3 not in self.solute_index
-            ):
-                solvent_angle_force.addAngle(p1, p2, p3, [theta0, k])
-            else:
-                print("Wrong Angle !")
-                exit()
-
-        self.system.addForce(solute_angle_force)
-        self.system.addForce(solvent_angle_force)
-
-    def separate_bond_pot(self):
-        """Useless in the REST2 case as solute potential energy
-        is obtain from the solute only system.
-        """
-
-        energy_expression = "(k/2)*(r-length)^2;"
-
-        # Create the Solvent bond
-        solvent_bond_force = openmm.CustomBondForce(energy_expression)
-        solvent_bond_force.addPerBondParameter("length")
-        solvent_bond_force.addPerBondParameter("k")
-
-        # Create the Solute bond
-        solute_bond_force = openmm.CustomBondForce(energy_expression)
-        solute_bond_force.addPerBondParameter("length")
-        solute_bond_force.addPerBondParameter("k")
-
-        original_bond_force = self.system_forces["HarmonicBondForce"]
-
-        for i in range(original_bond_force.getNumBonds()):
-            p1, p2, length, k = original_bond_force.getBondParameters(i)
-            # print(p1, p2)
-
-            if p1 in self.solute_index and p2 in self.solute_index:
-                solute_bond_force.addBond(p1, p2, [length, k])
-            elif p1 not in self.solute_index and p2 not in self.solute_index:
-                solvent_bond_force.addBond(p1, p2, [length, k])
-            else:
-                print("Wrong bond !")
-                exit()
-
-        self.system.addForce(solute_bond_force)
-        self.system.addForce(solvent_bond_force)
-
-    ###########################################################
-    ###  OLD FUNCTION To ensure nb calculation are correct  ###
-    ###########################################################
-    def add_custom_LJ_forces(self):
-        """
-        Create CustomNonbondedForce to capture solute-solute and solute-solvent interactions.
-        Assumes PME is in use.
-
-        Taken from:
-        https://github.com/openmm/openmm/pull/2014
-        """
-        # nonbonded_force.setNonbondedMethod(openmm.CustomNonbondedForce.CutoffPeriodic)
-
-        nonbonded_force = self.system_forces["NonbondedForce"]
-
-        # Determine PME parameters from nonbonded_force
-        cutoff_distance = nonbonded_force.getCutoffDistance()
-        [alpha_ewald, nx, ny, nz] = nonbonded_force.getPMEParameters()
-        if (alpha_ewald / alpha_ewald.unit) == 0.0:
-            # If alpha is 0.0, alpha_ewald is computed by OpenMM from from the error tolerance
-            tol = nonbonded_force.getEwaldErrorTolerance()
-            alpha_ewald = (1.0 / cutoff_distance) * np.sqrt(-np.log(2.0 * tol))
-        print(alpha_ewald)
-
-        # Create CustomNonbondedForce
-        ONE_4PI_EPS0 = 138.935456
-        energy_expression = "4*epsilon*((sigma/r)^12 - (sigma/r)^6);"
-        # energy_expression += "epsilon = epsilon1*epsilon2;" # Why not epsilon = sqrt(epsilon1*epsilon2)
-        energy_expression += "epsilon = sqrt(epsilon1*epsilon2);"  # Why not epsilon = sqrt(epsilon1*epsilon2)
-        energy_expression += "sigma = 0.5*(sigma1+sigma2);"
-        custom_nonbonded_force = openmm.CustomNonbondedForce(energy_expression)
-        custom_nonbonded_force.addPerParticleParameter("sigma")
-        custom_nonbonded_force.addPerParticleParameter("epsilon")
-        # custom_nonbonded_force.addPerParticleParameter('soluteFlag')
-        # custom_nonbonded_force.addInteractionGroup(solute, solvent)
-
-        # Configure force
-        custom_nonbonded_force.setNonbondedMethod(
-            openmm.CustomNonbondedForce.CutoffPeriodic
-        )
-        custom_nonbonded_force.setCutoffDistance(cutoff_distance)
-        custom_nonbonded_force.setUseLongRangeCorrection(True)  # True
-
-        switch_flag = nonbonded_force.getUseSwitchingFunction()
-        print("switch", switch_flag)
-        if switch_flag:
-            custom_nonbonded_force.setUseSwitchingFunction(True)
-            switching_distance = nonbonded_force.getSwitchingDistance()
-            custom_nonbonded_force.setSwitchingDistance(switching_distance)
-        else:  # Truncated
-            custom_nonbonded_force.setUseSwitchingFunction(False)
-
-        # Create CustomBondForce for exceptions
-        energy_expression = "4*epsilon*((sigma/r)^12 - (sigma/r)^6)"
-        custom_bond_force = openmm.CustomBondForce(energy_expression)
-        custom_bond_force.addPerBondParameter("sigma")
-        custom_bond_force.addPerBondParameter("epsilon")
-
-        # Copy particles
-        for particle_index in range(nonbonded_force.getNumParticles()):
-            [charge, sigma, epsilon] = nonbonded_force.getParticleParameters(
-                particle_index
-            )
-            if sigma == 0:
-                print(charge, sigma, epsilon)
-            # solute_type = 1 if index in solute else 0
-            # solute_type = 1
-            # custom_nonbonded_force.addParticle([charge, sigma, epsilon, solute_type])
-            custom_nonbonded_force.addParticle([sigma, epsilon])
-
-        # Copy solute-solute exclusions
-        for exception_index in range(nonbonded_force.getNumExceptions()):
-            [
-                iatom,
-                jatom,
-                chargeprod,
-                sigma,
-                epsilon,
-            ] = nonbonded_force.getExceptionParameters(exception_index)
-            custom_nonbonded_force.addExclusion(iatom, jatom)
-            # if (iatom in solute) and (jatom in solute):
-            custom_bond_force.addBond(iatom, jatom, [sigma, epsilon])
-
-        self.system.addForce(custom_nonbonded_force)
-        self.system.addForce(custom_bond_force)
-
-    def add_custom_Coulomb_forces(self):
-        """
-        Create CustomNonbondedForce to capture solute-solute and solute-solvent interactions.
-        Assumes PME is in use.
-
-        Taken from:
-        https://github.com/openmm/openmm/pull/2014
-        """
-        # nonbonded_force.setNonbondedMethod(openmm.CustomNonbondedForce.CutoffPeriodic)
-
-        nonbonded_force = self.system_forces["NonbondedForce"]
-
-        # Determine PME parameters from nonbonded_force
-        cutoff_distance = nonbonded_force.getCutoffDistance()
-        [alpha_ewald, nx, ny, nz] = nonbonded_force.getPMEParameters()
-        if (alpha_ewald / alpha_ewald.unit) == 0.0:
-            # If alpha is 0.0, alpha_ewald is computed by OpenMM from from the error tolerance
-            tol = nonbonded_force.getEwaldErrorTolerance()
-            alpha_ewald = (1.0 / cutoff_distance) * np.sqrt(-np.log(2.0 * tol))
-        print(alpha_ewald)
-
-        # Create CustomNonbondedForce
-        ONE_4PI_EPS0 = 138.935456
-        energy_expression = "ONE_4PI_EPS0*chargeprod*erfc(alpha_ewald*r)/r;"
-        energy_expression += "ONE_4PI_EPS0 = {:f};".format(
-            ONE_4PI_EPS0
-        )  # already in OpenMM units
-        energy_expression += "chargeprod = charge1*charge2;"
-        energy_expression += "alpha_ewald = {:f};".format(
-            alpha_ewald.value_in_unit_system(unit.md_unit_system)
-        )
-        custom_nonbonded_force = openmm.CustomNonbondedForce(energy_expression)
-        custom_nonbonded_force.addPerParticleParameter("charge")
-        # custom_nonbonded_force.addPerParticleParameter('soluteFlag')
-        # custom_nonbonded_force.addInteractionGroup(solute, solvent)
-
-        # Configure force
-        custom_nonbonded_force.setNonbondedMethod(
-            openmm.CustomNonbondedForce.CutoffPeriodic
-        )
-        custom_nonbonded_force.setCutoffDistance(cutoff_distance)
-        custom_nonbonded_force.setUseLongRangeCorrection(False)
-        switch_flag = nonbonded_force.getUseSwitchingFunction()
-        print("switch", switch_flag)
-        if switch_flag:
-            custom_nonbonded_force.setUseSwitchingFunction(True)
-            switching_distance = nonbonded_force.getSwitchingDistance()
-            custom_nonbonded_force.setSwitchingDistance(switching_distance)
-        else:  # Truncated
-            custom_nonbonded_force.setUseSwitchingFunction(False)
-
-        # Create CustomBondForce for exceptions
-        energy_expression = "ONE_4PI_EPS0*chargeProd_exceptions/r"
-        energy_expression += (
-            "- ONE_4PI_EPS0*chargeProd_product * erf(alpha_ewald * r) / r;"
-        )
-        energy_expression += "ONE_4PI_EPS0 = {:f};".format(
-            ONE_4PI_EPS0
-        )  # already in OpenMM units
-        energy_expression += "alpha_ewald = {:f};".format(
-            alpha_ewald.value_in_unit_system(unit.md_unit_system)
-        )
-        custom_bond_force = openmm.CustomBondForce(energy_expression)
-        custom_bond_force.setUsesPeriodicBoundaryConditions(True)
-        custom_bond_force.addPerBondParameter("chargeProd_exceptions")
-        custom_bond_force.addPerBondParameter("chargeProd_product")
-
-        # Copy particles
-        for particle_index in range(nonbonded_force.getNumParticles()):
-            [charge, sigma, epsilon] = nonbonded_force.getParticleParameters(
-                particle_index
-            )
-            if sigma == 0:
-                print(charge, sigma, epsilon)
-            # solute_type = 1 if index in solute else 0
-            # solute_type = 1
-            # custom_nonbonded_force.addParticle([charge, sigma, epsilon, solute_type])
-            custom_nonbonded_force.addParticle([charge])
-
-        # Copy solute-solute exclusions
-        for exception_index in range(nonbonded_force.getNumExceptions()):
-            [
-                iatom,
-                jatom,
-                chargeprod,
-                sigma,
-                epsilon,
-            ] = nonbonded_force.getExceptionParameters(exception_index)
-            custom_nonbonded_force.addExclusion(iatom, jatom)
-            # if (iatom in solute) and (jatom in solute):
-
-            # Compute chargeProd_product from original particle parameters
-            p1_params = custom_nonbonded_force.getParticleParameters(iatom)
-            p2_params = custom_nonbonded_force.getParticleParameters(jatom)
-            # print(p1_params)
-            chargeProd_product = p1_params[0] * p2_params[0]
-            custom_bond_force.addBond(iatom, jatom, [chargeprod, chargeProd_product])
-
-        self.system.addForce(custom_nonbonded_force)
-        self.system.addForce(custom_bond_force)
-
-    def add_reciprocal_force(self):
-        standard_nonbonded_force = openmm.NonbondedForce()
-
-        # Set nonbonded method and related attributes
-        nonbonded_force = self.system_forces["NonbondedForce"]
-
-        standard_nonbonded_method = nonbonded_force.getNonbondedMethod()
-        standard_nonbonded_force.setNonbondedMethod(standard_nonbonded_method)
-        if standard_nonbonded_method in [
-            openmm.NonbondedForce.CutoffPeriodic,
-            openmm.NonbondedForce.CutoffNonPeriodic,
-        ]:
-            epsilon_solvent = nonbonded_force.getReactionFieldDielectric()
-            r_cutoff = nonbonded_force.getCutoffDistance()
-            standard_nonbonded_force.setReactionFieldDielectric(epsilon_solvent)
-            standard_nonbonded_force.setCutoffDistance(r_cutoff)
-        elif standard_nonbonded_method in [
-            openmm.NonbondedForce.PME,
-            openmm.NonbondedForce.Ewald,
-        ]:
-            print("PME")
-            [alpha_ewald, nx, ny, nz] = nonbonded_force.getPMEParameters()
-            delta = nonbonded_force.getEwaldErrorTolerance()
-            r_cutoff = nonbonded_force.getCutoffDistance()
-            standard_nonbonded_force.setPMEParameters(alpha_ewald, nx, ny, nz)
-            standard_nonbonded_force.setEwaldErrorTolerance(delta)
-            standard_nonbonded_force.setCutoffDistance(r_cutoff)
-        # Set the use of dispersion correction
-        if nonbonded_force.getUseDispersionCorrection():
-            print("Dispersion Correction")
-            standard_nonbonded_force.setUseDispersionCorrection(True)
-        else:
-            standard_nonbonded_force.setUseDispersionCorrection(False)
-
-        # Set the use of switching function
-        if nonbonded_force.getUseSwitchingFunction():
-            print("Switch")
-            switching_distance = nonbonded_force.getSwitchingDistance()
-            standard_nonbonded_force.setUseSwitchingFunction(True)
-            standard_nonbonded_force.setSwitchingDistance(switching_distance)
-        else:
-            standard_nonbonded_force.setUseSwitchingFunction(False)
-
-        # Disable direct space interactions
-        standard_nonbonded_force.setIncludeDirectSpace(False)
-
-        # Iterate over particles in original nonbonded force and copy to the new nonbonded force
-        for particle_idx in range(nonbonded_force.getNumParticles()):
-            # Get particle terms
-            q, sigma, epsilon = nonbonded_force.getParticleParameters(particle_idx)
-
-            # Add particle
-            standard_nonbonded_force.addParticle(q, sigma, epsilon)
-
-        for exception_idx in range(nonbonded_force.getNumExceptions()):
-            # Get particle indices and exception terms
-            p1, p2, chargeProd, sigma, epsilon = nonbonded_force.getExceptionParameters(
-                exception_idx
-            )
-
-            # Add exception
-            standard_nonbonded_force.addException(p1, p2, chargeProd, sigma, epsilon)
-
-        self.system.addForce(standard_nonbonded_force)
-
-    def add_custom_solute_nb_forces(self, solvent, solute):
-        """
-        Create CustomNonbondedForce to capture solute-solute and solute-solvent interactions.
-        Assumes PME is in use.
-
-        Taken from:
-        https://github.com/openmm/openmm/pull/2014
-        """
-
-        nonbonded_force = self.system_forces["NonbondedForce"]
-
-        # Determine PME parameters from nonbonded_force
-        cutoff_distance = nonbonded_force.getCutoffDistance()
-        [alpha_ewald, nx, ny, nz] = nonbonded_force.getPMEParameters()
-        if (alpha_ewald / alpha_ewald.unit) == 0.0:
-            # If alpha is 0.0, alpha_ewald is computed by OpenMM from from the error tolerance
-            tol = nonbonded_force.getEwaldErrorTolerance()
-            alpha_ewald = (1.0 / cutoff_distance) * np.sqrt(-np.log(2.0 * tol))
-        # print(alpha_ewald)
-
-        # Create CustomNonbondedForce
-        ONE_4PI_EPS0 = 138.935456
-        energy_expression = "((4*epsilon*((sigma/r)^12 - (sigma/r)^6)"
-        energy_expression += "+ ONE_4PI_EPS0*chargeprod*erfc(alpha_ewald*r)/r));"
-        energy_expression += "epsilon = sqrt(epsilon1*epsilon2);"
-        energy_expression += "sigma = 0.5*(sigma1+sigma2);"
-        energy_expression += "ONE_4PI_EPS0 = {:f};".format(
-            ONE_4PI_EPS0
-        )  # already in OpenMM units
-        energy_expression += "chargeprod = charge1*charge2;"
-        energy_expression += "alpha_ewald = {:f};".format(
-            alpha_ewald.value_in_unit_system(unit.md_unit_system)
-        )
-        custom_nonbonded_force = openmm.CustomNonbondedForce(energy_expression)
-        custom_nonbonded_force.addPerParticleParameter("charge")
-        custom_nonbonded_force.addPerParticleParameter("sigma")
-        custom_nonbonded_force.addPerParticleParameter("epsilon")
-        # custom_nonbonded_force.addPerParticleParameter('soluteFlag')
-        custom_nonbonded_force.addInteractionGroup(solute, solvent)
-
-        # Configure force
-        custom_nonbonded_force.setNonbondedMethod(
-            openmm.CustomNonbondedForce.CutoffPeriodic
-        )
-        custom_nonbonded_force.setCutoffDistance(cutoff_distance)
-        custom_nonbonded_force.setUseLongRangeCorrection(False)  # Not correct for LJ
-
-        switch_flag = nonbonded_force.getUseSwitchingFunction()
-        print("switch", switch_flag)
-        if switch_flag:
-            custom_nonbonded_force.setUseSwitchingFunction(True)
-            switching_distance = nonbonded_force.getSwitchingDistance()
-            custom_nonbonded_force.setSwitchingDistance(switching_distance)
-        else:  # Truncated
-            custom_nonbonded_force.setUseSwitchingFunction(False)
-
-        # Copy particles
-        self.init_nb_param = []
-        for particle_index in range(nonbonded_force.getNumParticles()):
-            [charge, sigma, epsilon] = nonbonded_force.getParticleParameters(
-                particle_index
-            )
-            # solute_type = 1 if index in solute else 0
-            # solute_type = 1
-            # custom_nonbonded_force.addParticle([charge, sigma, epsilon, solute_type])
-            custom_nonbonded_force.addParticle([charge, sigma, epsilon])
-            self.init_nb_param.append([charge, sigma, epsilon])
-
-        if solvent == solute:
-            # Create CustomBondForce for exceptions
-            energy_expression = "((4*epsilon*((sigma/r)^12 - (sigma/r)^6)"
-            energy_expression += " + ONE_4PI_EPS0*chargeprod/r));"
-            energy_expression += "ONE_4PI_EPS0 = {:f};".format(
-                ONE_4PI_EPS0
-            )  # already in OpenMM units
-            custom_bond_force = openmm.CustomBondForce(energy_expression)
-            custom_bond_force.addPerBondParameter("chargeprod")
-            custom_bond_force.addPerBondParameter("sigma")
-            custom_bond_force.addPerBondParameter("epsilon")
-
-        # Copy solute-solute exclusions
-        self.init_nb_exept_index = []
-        self.init_nb_exept_value = []
-        for exception_index in range(nonbonded_force.getNumExceptions()):
-            [
-                iatom,
-                jatom,
-                chargeprod,
-                sigma,
-                epsilon,
-            ] = nonbonded_force.getExceptionParameters(exception_index)
-            if iatom in solute and jatom in solute:
-                self.init_nb_exept_index.append(exception_index)
-                self.init_nb_exept_value.append(
-                    [iatom, jatom, chargeprod, sigma, epsilon]
-                )
-            custom_nonbonded_force.addExclusion(iatom, jatom)
-            if solvent == solute:
-                if (
-                    iatom in solute and jatom in solute
-                ):  # or (iatom in solvent and jatom in solvent):
-                    # print(iatom, jatom, chargeprod, sigma, epsilon)
-                    custom_bond_force.addBond(
-                        iatom, jatom, [chargeprod, sigma, epsilon]
-                    )
-                    if chargeprod._value != 0.0 and epsilon._value != 0.0:
-                        print(iatom, jatom, chargeprod, sigma, epsilon)
-                """
-                if (iatom in solute and jatom in solute):
-                    print("solute", iatom, jatom, chargeprod, sigma, epsilon)
-                if (iatom in solute and jatom in solvent):
-                    print("solute-solvent", iatom, jatom, chargeprod, sigma, epsilon)
-                #if (iatom in solvent and jatom in solvent):
-                #    print("Solvent", chargeprod, sigma, epsilon)
-                """
-
-        self.system.addForce(custom_nonbonded_force)
-        self.system_forces["CustomNonbondedForce"] = custom_nonbonded_force
-        self.add_negative_force(
-            custom_nonbonded_force, name="NegativeCustomNonbondedForce"
-        )
-
-        if solvent == solute:
-            self.system.addForce(custom_bond_force)
-            self.add_negative_force(custom_bond_force)
-
-    def update_custom_nonbonded(self, scale):
-        custom_nonbonded_force = self.system_forces["CustomNonbondedForce"]
-
-        for i in self.solute_index:
-            q, sigma, eps = self.init_nb_param[i]
-            custom_nonbonded_force.setParticleParameters(
-                i, [q * np.sqrt(scale), sigma, eps * scale]
-            )
-
-        # Need to fix simulation
-        custom_nonbonded_force.updateParametersInContext(self.simulation.context)
-
-        custom_nonbonded_force = self.system_forces["NegativeCustomNonbondedForce"]
-
-        for i in self.solute_index:
-            q, sigma, eps = self.init_nb_param[i]
-            custom_nonbonded_force.setParticleParameters(
-                i, [q * np.sqrt(scale), sigma, eps * scale]
-            )
-
-        # Need to fix simulation
-        custom_nonbonded_force.updateParametersInContext(self.simulation.context)
-
 
 def run_rest2(
     sys_rest2,
