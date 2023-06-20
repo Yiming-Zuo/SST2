@@ -274,9 +274,3 @@ if __name__ == "__main__":
         reportInterval=save_step_log,
         overwrite=False,
         save_checkpoint_steps=save_check_steps)
-    
-
-"""
-vmd test_2HPL/2HPL_em_water.pdb test_2HPL/2HPL_equi_water.dcd -m 2HPL.pdb
-pbc wrap -molid 0 -first 0 -last last -compound fragment -center com -centersel "chain A and protein" -orthorhombic
-"""

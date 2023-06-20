@@ -106,7 +106,7 @@ def test_peptide_protein_complex(tmp_path):
 
     assert ladder_num == 3
 
-    temp_list = sst2.compute_temperature_list(
+    temp_list = tools.compute_temperature_list(
         minTemperature=300,
         maxTemperature=500,
         numTemperatures=ladder_num,

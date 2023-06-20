@@ -23,7 +23,7 @@ setup(
     author='Samuel Murail',
     author_email="samuel.murail@u-paris.fr",
     url='https://github.com/samuelmurail/SST2',
-    packages=['SST2'],
+    packages=find_packages(),
     package_dir={'SST2': 'src/SST2'},
     entry_points={'console_scripts': ['SST2 = SST2.__main__:main']},
     include_package_data=True,

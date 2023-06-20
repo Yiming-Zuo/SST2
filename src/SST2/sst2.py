@@ -3,27 +3,6 @@
 
 
 """
-simulatedtempering.py: Implements simulated tempering
-
-This is part of the OpenMM molecular simulation toolkit originating from
-Simbios, the NIH National Center for Physics-Based Simulation of
-Biological Structures at Stanford, funded under the NIH Roadmap for
-Medical Research, grant U54 GM072970. See https://simtk.org.
-
-Portions copyright (c) 2015 Stanford University and the Authors.
-Authors: Peter Eastman
-Contributors:
-
-Permission is hereby granted, free of charge, to any person obtaining a 
-copy of this software and associated documentation files (the "Software"),
-to deal in the Software without restriction, including without limitation
-the rights to use, copy, modify, merge, publish, distribute, sublicense,
-and/or sell copies of the Software, and to permit persons to whom the
-Software is furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in
-all copies or substantial portions of the Software.
-
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
@@ -32,8 +11,9 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
 OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
 USE OR OTHER DEALINGS IN THE SOFTWARE.
 """
-__author__ = "Peter Eastman"
-__version__ = "1.0"
+
+__author__ = "Samuel Murail"
+__version__ = "0.0.1"
 
 import openmm.unit as unit
 import random
@@ -42,20 +22,6 @@ from sys import stdout
 import pandas as pd
 import numpy as np
 import logging
-
-try:
-    import bz2
-
-    have_bz2 = True
-except:
-    have_bz2 = False
-
-try:
-    import gzip
-
-    have_gzip = True
-except:
-    have_gzip = False
 
 # Logging
 logger = logging.getLogger(__name__)
@@ -100,7 +66,7 @@ class SST2Reporter(object):
         if simulation.currentStep % st.reportInterval == 0:
             st._writeReport(energie_group)
         if simulation.currentStep % st.tempChangeInterval == 0:
-            st._attemptTemperatureChange(state, energie_group[0], energie_group[3])
+            st._attemptTemperatureChange(energie_group[0], energie_group[3])
 
 
 class SST2(object):
@@ -241,22 +207,7 @@ class SST2(object):
 
         self._openedFile = isinstance(reportFile, str)
         if self._openedFile:
-            # Detect the desired compression scheme from the filename extension
-            # and open all files unbuffered
-            if reportFile.endswith(".gz"):
-                if not have_gzip:
-                    raise RuntimeError(
-                        "Cannot write .gz file because Python could not import gzip library"
-                    )
-                self._out = gzip.GzipFile(fileobj=open(reportFile, "wb", 0))
-            elif reportFile.endswith(".bz2"):
-                if not have_bz2:
-                    raise RuntimeError(
-                        "Cannot write .bz2 file because Python could not import bz2 library"
-                    )
-                self._out = bz2.BZ2File(reportFile, "w", 0)
-            else:
-                self._out = open(reportFile, "w", 1)
+            self._out = open(reportFile, "w", 1)
         else:
             self._out = reportFile
 
@@ -278,7 +229,7 @@ class SST2(object):
             self.currentTemperature = first_temp_index
         else:
             # Need to treat the case where weights is not None and restart_files is not None
-            # This is BAD MOKAY !!!!! :
+            # TO CHANGE ! This is BAD MOKAY !!!!! :
             self.currentTemperature = 0
 
         # print(self.temperatures[self.currentTemperature])
@@ -300,7 +251,7 @@ class SST2(object):
             "E solvent (kJ/mole)",
             "E solvent-solute (kJ/mole)",
         ]
-        print('"%s"' % ('","').join(headers), file=self._out)
+        print((",").join(headers), file=self._out)
 
     def compute_starting_weight(self, restart_files, restart_files_full):
         """Compute the weight factor for each temperature.
@@ -374,6 +325,8 @@ class SST2(object):
             logger.info(self._e_solute_solv_avg)
             logger.info(f"last temperature = {temp_array[first_temp_index]}")
             return first_temp_index
+        else:
+            return 0
 
     def _writeReport(self, energie_group):
         """Write out a line to the report."""
@@ -433,7 +386,7 @@ class SST2(object):
 
         return weight
 
-    def _attemptTemperatureChange(self, state, ener_solut, ener_solut_solv):
+    def _attemptTemperatureChange(self, ener_solut, ener_solut_solv):
         """Attempt to move to a different temperature."""
 
         temp_list = []
@@ -609,70 +562,3 @@ def run_sst2(
         save_checkpoint_steps=save_checkpoint_steps,
     )
 
-
-def compute_temperature_list(
-    minTemperature, maxTemperature, numTemperatures, refTemperature=None
-):
-    """Compute the list of temperatures to simulate.
-
-    Parameters
-    ----------
-    minTemperature : float
-        Minimum temperature to simulate.
-    maxTemperature : float
-        Maximum temperature to simulate.
-    numTemperatures : int
-        Number of temperatures to simulate.
-    refTemperature : float, optional
-        Reference temperature. The default is None.
-
-    """
-
-    if unit.is_quantity(minTemperature):
-        minTemperature = minTemperature.in_units_of(unit.kelvin)
-    else:
-        minTemperature *= unit.kelvin
-
-    if unit.is_quantity(maxTemperature):
-        maxTemperature = maxTemperature.in_units_of(unit.kelvin)
-    else:
-        maxTemperature *= unit.kelvin
-
-    if refTemperature is not None:
-        if unit.is_quantity(refTemperature):
-            refTemperature = refTemperature.in_units_of(unit.kelvin)
-        else:
-            refTemperature *= unit.kelvin
-
-    # Case with refTemp is minTemp
-    temperatures = [
-        minTemperature
-        * ((maxTemperature / minTemperature) ** (i / float(numTemperatures - 1)))
-        for i in range(numTemperatures)
-    ]
-    if refTemperature is None or refTemperature == minTemperature:
-        refTemperature = minTemperature
-    else:
-        # Get closest temp to ref temp
-        diff_temp = [abs(temp - refTemperature) for temp in temperatures]
-        ref_index = diff_temp.index(min(diff_temp))
-
-        if ref_index > 0:
-            temperatures = [
-                minTemperature * ((refTemperature / minTemperature) ** (i / ref_index))
-                for i in range(ref_index)
-            ]
-            temperatures += [
-                refTemperature
-                * ((maxTemperature / refTemperature))
-                ** (i / (numTemperatures - ref_index - 1))
-                for i in range(numTemperatures - ref_index)
-            ]
-        else:
-            temperatures = [minTemperature] + [
-                refTemperature
-                * ((maxTemperature / refTemperature)) ** (i / (numTemperatures - 2))
-                for i in range(numTemperatures - 1)
-            ]
-
-    return temperatures

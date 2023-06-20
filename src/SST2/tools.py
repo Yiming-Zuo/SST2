@@ -617,3 +617,71 @@ def compute_ladder_num(generic_name, min_temp, max_temp):
     logger.info(f"\nHere N = {np.ceil(2*N_Denshlag):.2f}")
 
     return int(np.ceil(N_Denshlag))
+
+
+def compute_temperature_list(
+    minTemperature, maxTemperature, numTemperatures, refTemperature=None
+):
+    """Compute the list of temperatures to simulate.
+
+    Parameters
+    ----------
+    minTemperature : float
+        Minimum temperature to simulate.
+    maxTemperature : float
+        Maximum temperature to simulate.
+    numTemperatures : int
+        Number of temperatures to simulate.
+    refTemperature : float, optional
+        Reference temperature. The default is None.
+
+    """
+
+    if unit.is_quantity(minTemperature):
+        minTemperature = minTemperature.in_units_of(unit.kelvin)
+    else:
+        minTemperature *= unit.kelvin
+
+    if unit.is_quantity(maxTemperature):
+        maxTemperature = maxTemperature.in_units_of(unit.kelvin)
+    else:
+        maxTemperature *= unit.kelvin
+
+    if refTemperature is not None:
+        if unit.is_quantity(refTemperature):
+            refTemperature = refTemperature.in_units_of(unit.kelvin)
+        else:
+            refTemperature *= unit.kelvin
+
+    # Case with refTemp is minTemp
+    temperatures = [
+        minTemperature
+        * ((maxTemperature / minTemperature) ** (i / float(numTemperatures - 1)))
+        for i in range(numTemperatures)
+    ]
+    if refTemperature is None or refTemperature == minTemperature:
+        refTemperature = minTemperature
+    else:
+        # Get closest temp to ref temp
+        diff_temp = [abs(temp - refTemperature) for temp in temperatures]
+        ref_index = diff_temp.index(min(diff_temp))
+
+        if ref_index > 0:
+            temperatures = [
+                minTemperature * ((refTemperature / minTemperature) ** (i / ref_index))
+                for i in range(ref_index)
+            ]
+            temperatures += [
+                refTemperature
+                * ((maxTemperature / refTemperature))
+                ** (i / (numTemperatures - ref_index - 1))
+                for i in range(numTemperatures - ref_index)
+            ]
+        else:
+            temperatures = [minTemperature] + [
+                refTemperature
+                * ((maxTemperature / refTemperature)) ** (i / (numTemperatures - 2))
+                for i in range(numTemperatures - 1)
+            ]
+
+    return temperatures
