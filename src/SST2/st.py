@@ -1,5 +1,4 @@
 """
-Portions copyright (c) 2023 Université Paris Cité and the Authors.
 Authors: Samuel Murail.
 
 This package is largely inspired by the Peter Eastman's simulatedtempering
@@ -35,15 +34,53 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
 OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
 USE OR OTHER DEALINGS IN THE SOFTWARE.
 """
-__author__ = "Samuel Murail, Peter Eastman"
+__author__ = ["Samuel Murail", "Peter Eastman"]
 __version__ = "0.0.1"
 
 import openmm.unit as unit
 import math
+import os
 import random
+import logging
 from sys import stdout
 import pandas as pd
 import numpy as np
+
+from .tools import simulate
+
+
+# Logging
+logger = logging.getLogger(__name__)
+
+
+class STReporter(object):
+    """ST reporter to the simulation which will handle the updates and reports."""
+
+    def __init__(self, st):
+        self.st = st
+
+    def describeNextReport(self, simulation):
+        steps1 = (
+            self.st.tempChangeInterval
+            - simulation.currentStep % self.st.tempChangeInterval
+        )
+        steps2 = (
+            self.st.reportInterval - simulation.currentStep % self.st.reportInterval
+        )
+        steps = min(steps1, steps2)
+        isUpdateAttempt = steps1 == steps
+        return (steps, False, isUpdateAttempt, False, isUpdateAttempt)
+
+    def report(self, simulation, state):
+        self.st._e_pot_num[self.st.currentTemperature] += 1
+        self.st._e_pot_avg[self.st.currentTemperature] += (
+            state.getPotentialEnergy() - self.st._e_pot_avg[self.st.currentTemperature]
+        ) / self.st._e_pot_num[self.st.currentTemperature]
+
+        if simulation.currentStep % self.st.tempChangeInterval == 0:
+            self.st._attemptTemperatureChange(state)
+        if simulation.currentStep % self.st.reportInterval == 0:
+            self.st._writeReport()
 
 
 class ST(object):
@@ -64,9 +101,7 @@ class ST(object):
     The temperatures are chosen spaced
     exponentially between the two extremes.  For example,
 
-    st = SimulatedTempering(simulation, numTemperatures=15,
-                            minTemperature=300*kelvin,
-                            maxTemperature=450*kelvin)
+    st = SimulatedTempering(simulation, numTemperatures=15)
 
     After creating the SimulatedTempering object, call step() on it to
     run the simulation.
@@ -92,21 +127,40 @@ class ST(object):
     match the interval at which you save frames from the simulation).
     You can specify the output file and reporting interval with the
     "reportFile" and "reportInterval" arguments.
+
+    Parameters
+    ----------
+    simulation: Simulation
+        The Simulation defining the System, Context, and Integrator to use
+    temperatures: list
+        The list of temperatures to use for tempering, in increasing order
+    weights: list
+        The weight factor for each temperature.  If none, weights are selected automatically.
+    tempChangeInterval: int
+        The interval (in time steps) at which to attempt transitions between temperatures
+    reportInterval: int
+        The interval (in time steps) at which to write information to the report file
+    reportFile: string or file
+        The file to write reporting information to, or stdout if not specified
+
+
+    Methods
+    -------
+    compute_starting_weight(restart_files, restart_files_full)
+        Compute the starting weight for each temperature
+
     """
 
     def __init__(
         self,
         simulation,
-        temperatures=None,
-        numTemperatures=None,
-        minTemperature=None,
-        maxTemperature=None,
+        temperatures,
         weights=None,
         tempChangeInterval=25,
         reportInterval=1000,
         reportFile=stdout,
-        restart_file=None,
-        restart_file_full=None,
+        restart_files=None,
+        restart_files_full=None,
     ):
         """Create a new SimulatedTempering.
 
@@ -116,12 +170,6 @@ class ST(object):
             The Simulation defining the System, Context, and Integrator to use
         temperatures: list
             The list of temperatures to use for tempering, in increasing order
-        numTemperatures: int
-            The number of temperatures to use for tempering.  If temperatures is not None, this is ignored.
-        minTemperature: temperature
-            The minimum temperature to use for tempering.  If temperatures is not None, this is ignored.
-        maxTemperature: temperature
-            The maximum temperature to use for tempering.  If temperatures is not None, this is ignored.
         weights: list
             The weight factor for each temperature.  If none, weights are selected automatically.
         tempChangeInterval: int
@@ -130,35 +178,23 @@ class ST(object):
             The interval (in time steps) at which to write information to the report file
         reportFile: string or file
             The file to write reporting information to, specified as a file name or file object
+        restart_files: list
+            The list of csv files to use for ST restarting
+        restart_files_full: list
+            The list of full csv files to use for ST restarting
         """
         self.simulation = simulation
-        if temperatures is None:
-            if unit.is_quantity(minTemperature):
-                minTemperature = minTemperature.value_in_unit(unit.kelvin)
-            if unit.is_quantity(maxTemperature):
-                maxTemperature = maxTemperature.value_in_unit(unit.kelvin)
-            self.temperatures = [
-                minTemperature
-                * (
-                    (float(maxTemperature) / minTemperature)
-                    ** (i / float(numTemperatures - 1))
-                )
-                for i in range(numTemperatures)
-            ] * unit.kelvin
-        else:
-            numTemperatures = len(temperatures)
-            self.temperatures = [
-                (t.value_in_unit(unit.kelvin) if unit.is_quantity(t) else t)
-                * unit.kelvin
-                for t in temperatures
-            ]
-            if any(
-                self.temperatures[i] >= self.temperatures[i + 1]
-                for i in range(numTemperatures - 1)
-            ):
-                raise ValueError(
-                    "The temperatures must be in strictly increasing order"
-                )
+
+        numTemperatures = len(temperatures)
+        self.temperatures = [
+            (t.value_in_unit(unit.kelvin) if unit.is_quantity(t) else t) * unit.kelvin
+            for t in temperatures
+        ]
+        if any(
+            self.temperatures[i] >= self.temperatures[i + 1]
+            for i in range(numTemperatures - 1)
+        ):
+            raise ValueError("The temperatures must be in strictly increasing order")
         self.tempChangeInterval = tempChangeInterval
         self.reportInterval = reportInterval
         self.inverseTemperatures = [
@@ -176,132 +212,127 @@ class ST(object):
         # Initialize the weights.
 
         if weights is None:
-            self._e_pot_num = [0] * numTemperatures
-            self._e_pot_sum = [0.0 * unit.kilojoule / unit.mole] * numTemperatures
-            self._weights = [0.0] * numTemperatures
+            first_temp_index = self.compute_starting_weight(
+                restart_files, restart_files_full
+            )
             self._updateWeights = True
-            self._weights_factor = [1.0] * numTemperatures
-
-            # For restart, weight should be recomputed based on previous results
-            if restart_file is not None and restart_file_full is not None:
-                df_sim = pd.read_csv(restart_file[0])
-                df_temp = pd.read_csv(restart_file_full[0], sep="\t")
-
-                for i in range(1, len(restart_file)):
-                    print(f"Reading part {i}")
-                    df_sim_part = pd.read_csv(restart_file[i])
-                    df_temp_part = pd.read_csv(restart_file_full[i], sep="\t")
-
-                    df_sim = (
-                        pd.concat([df_sim, df_sim_part], axis=0, join="outer")
-                        .reset_index()
-                        .drop(["index"], axis=1)
-                    )
-                    df_temp = (
-                        pd.concat([df_temp, df_temp_part], axis=0, join="outer")
-                        .reset_index()
-                        .drop(["index"], axis=1)
-                    )
-
-                df_sim["Temperature (K)"] = df_temp["Temperature (K)"]
-                temp_array = df_temp["Temperature (K)"].unique()
-
-                # In case df_sim and df_temp are not excactly the same length
-                # Remove the NaN values
-                df_sim = df_sim.dropna()
-
-                print(temp_array)
-
-                for index, row in df_sim.iterrows():
-                    temp_index = np.where(temp_array == row["Temperature (K)"])[0][0]
-                    self._e_pot_num[temp_index] += 1
-                    self._e_pot_sum[temp_index] += (
-                        row["Potential Energy (kJ/mole)"] * unit.kilojoule / unit.mole
-                    )
-                    if index % 50 == 0:
-                        first_temp_index = temp_index
-
-                print(f"last temperature = {temp_array[first_temp_index]}")
-
-                for k in range(len(self._weights) - 1):
-                    # Use Park and Pande weights:
-                    # f(n+1) = fn + (β(n+1) − βn)*(E(n+1) + En)/2,
-
-                    new_weight = (
-                        self.inverseTemperatures[k + 1] - self.inverseTemperatures[k]
-                    )
-                    if self._e_pot_num[k + 1] != 0:
-                        new_weight *= self._e_pot_sum[k] / (
-                            2 * self._e_pot_num[k]
-                        ) + self._e_pot_sum[k + 1] / (2 * self._e_pot_num[k + 1])
-                        self._weights[k + 1] = (
-                            self._weights[k] + new_weight * self._weights_factor[k + 1]
-                        )
-                        # self._weights[k + 1] *= self._weights_factor[k + 1]
-
-                    # Use H. Nguyen hack
-                    # f(n+1) = fn + (β(n+1) − βn)*En,
-                    else:
-                        new_weight *= self._e_pot_sum[k] / (self._e_pot_num[k])
-                        self._weights[k + 1] = (
-                            self._weights[k] + new_weight * self._weights_factor[k + 1]
-                        )
-                        # self._weights[k + 1] *= self._weights_factor[k + 1]
-                        break
-
-                print(self._weights)
-
         else:
             self._weights = weights
             self._updateWeights = False
 
         # Select the initial temperature.
 
-        if restart_file is None:
+        if restart_files is None:
             self.currentTemperature = 0
-        else:
+        elif weights is None:
             self.currentTemperature = first_temp_index
-        # print(self.temperatures[self.currentTemperature])
+        else:
+            # Need to treat the case where weights is not None and restart_files is not None
+            # TO CHANGE ! This is BAD MOKAY !!!!! :
+            self.currentTemperature = 0
+
         self.simulation.integrator.setTemperature(
             self.temperatures[self.currentTemperature]
         )
-
-        # Add a reporter to the simulation which will handle the updates and reports.
-
-        class STReporter(object):
-            def __init__(self, st):
-                self.st = st
-
-            def describeNextReport(self, simulation):
-                st = self.st
-                steps1 = (
-                    st.tempChangeInterval
-                    - simulation.currentStep % st.tempChangeInterval
-                )
-                steps2 = st.reportInterval - simulation.currentStep % st.reportInterval
-                steps = min(steps1, steps2)
-                isUpdateAttempt = steps1 == steps
-                return (steps, False, isUpdateAttempt, False, isUpdateAttempt)
-
-            def report(self, simulation, state):
-                st = self.st
-
-                st._e_pot_num[st.currentTemperature] += 1
-                st._e_pot_sum[st.currentTemperature] += state.getPotentialEnergy()
-
-                if simulation.currentStep % st.tempChangeInterval == 0:
-                    st._attemptTemperatureChange(state)
-                if simulation.currentStep % st.reportInterval == 0:
-                    st._writeReport()
 
         simulation.reporters.append(STReporter(self))
 
         # Write out the header line.
 
-        headers = ["Steps", "Temperature (K)"]
+        headers = ["Step", "Aim Temp (K)"]
         for t in self.temperatures:
             headers.append("%gK Weight" % t.value_in_unit(unit.kelvin))
-        print('#"%s"' % ('"\t"').join(headers), file=self._out)
+        print((",").join(headers), file=self._out)
+
+    def compute_starting_weight(self, restart_files, restart_files_full):
+        """Compute the weight factor for each temperature.
+
+        Parameters
+        ----------
+        restart_files: list of strings
+            Files to read restart information to, specified as a file name
+        restart_files_full: string
+            Full Rest2 files to read restart information to, specified as a file name
+
+        Returns
+        -------
+        first_temp_index: int
+            Index of the last used temperature
+        """
+        numTemperatures = len(self.temperatures)
+        # Initialize the energy arrays.
+        self._e_pot_num = [0] * numTemperatures
+        self._e_pot_avg = [0.0 * unit.kilojoules_per_mole] * numTemperatures
+        self._weights = [0.0] * numTemperatures
+
+        # For restart, weight should be recomputed based on previous results
+        if restart_files is not None and restart_files_full is not None:
+            df_sim = pd.read_csv(restart_files[0])
+            df_temp = pd.read_csv(restart_files_full[0])
+
+            for i in range(1, len(restart_files)):
+                logger.info(f"Reading part {i}")
+                df_sim_part = pd.read_csv(restart_files[i])
+                df_temp_part = pd.read_csv(restart_files_full[i])
+
+                df_sim = (
+                    pd.concat([df_sim, df_sim_part], axis=0, join="outer")
+                    .reset_index()
+                    .drop(["index"], axis=1)
+                )
+                df_temp = (
+                    pd.concat([df_temp, df_temp_part], axis=0, join="outer")
+                    .reset_index()
+                    .drop(["index"], axis=1)
+                )
+
+            # Remove Nan rows (rare cases of crashes)
+            df_sim = df_sim[df_sim.iloc[:, 0].notna()]
+            df_sim["Temperature (K)"] = df_temp["Aim Temp (K)"]
+            temp_array = df_sim["Temperature (K)"].unique()
+            temp_array.sort()
+            logger.info(temp_array)
+
+            # Remove Nan rows (rare cases of crashes)
+            df_temp = df_temp[df_temp.iloc[:, 0].notna()]
+
+            for temp_index, temp in enumerate(temp_array):
+                df_local = df_sim[df_sim["Temperature (K)"] == temp]
+                self._e_pot_num[temp_index] = len(df_local)
+                self._e_pot_avg[temp_index] = (
+                    df_local["Potential Energy (kJ/mole)"].mean()
+                    * unit.kilojoules_per_mole
+                )
+
+            for k in range(len(self._weights) - 1):
+                # Use Park and Pande weights:
+                # f(n+1) = fn + (β(n+1) − βn)*(E(n+1) + En)/2,
+                weight = self.inverseTemperatures[k + 1] - self.inverseTemperatures[k]
+                if self._e_pot_num[k + 1] != 0:
+                    weight *= self._e_pot_avg[k] / 2 + self._e_pot_avg[k + 1] / 2
+                    self._weights[k + 1] = self._weights[k] + weight
+
+                # Use H. Nguyen hack
+                # f(n+1) = fn + (β(n+1) − βn)*En,
+                else:
+                    weight *= self._e_pot_avg[k]
+                    self._weights[k + 1] = self._weights[k] + weight
+                    break
+
+            first_temp_index = 0
+            for index, row in df_sim.iloc[::-1].iterrows():
+                if index % (50 * 10) == 0:
+                    temp_index = np.where(temp_array == row["Temperature (K)"])[0][0]
+                    first_temp_index = temp_index
+                    break
+
+            logger.info(self._e_pot_num)
+            logger.info(self._e_pot_avg)
+            logger.info(self._weights)
+            logger.info(f"last temperature = {temp_array[first_temp_index]}")
+            return first_temp_index
+        else:
+            return 0
 
     def __del__(self):
         if self._openedFile:
@@ -330,7 +361,7 @@ class ST(object):
 
         # p(n->n-1)
         if self.currentTemperature != 0:
-            min_i = index
+            min_i = index - 1
             new_index = index - 1
 
             test_down = pot_ener * (
@@ -383,25 +414,16 @@ class ST(object):
             for k in range(min_i, len(self._weights) - 1):
                 # Use Park and Pande weights:
                 # f(n+1) = f(n) + (β(n+1) − β(n)) * (E(n+1) + E(n)) / 2,
-
-                new_weight = (
-                    self.inverseTemperatures[k + 1] - self.inverseTemperatures[k]
-                )
+                weight = self.inverseTemperatures[k + 1] - self.inverseTemperatures[k]
                 if self._e_pot_num[k + 1] != 0:
-                    new_weight *= self._e_pot_sum[k] / (
-                        2 * self._e_pot_num[k]
-                    ) + self._e_pot_sum[k + 1] / (2 * self._e_pot_num[k + 1])
-                    self._weights[k + 1] = (
-                        self._weights[k] + new_weight * self._weights_factor[k + 1]
-                    )
+                    weight *= self._e_pot_avg[k] / 2 + self._e_pot_avg[k + 1] / 2
+                    self._weights[k + 1] = self._weights[k] + weight
 
                 # Use H. Nguyen hack
-                # f(n+1) = f(n) + (β(n+1) − β(n)) * E(n),
+                # f(n+1) = fn + (β(n+1) − βn)*En,
                 else:
-                    new_weight *= self._e_pot_sum[k] / (self._e_pot_num[k])
-                    self._weights[k + 1] = (
-                        self._weights[k] + new_weight * self._weights_factor[k + 1]
-                    )
+                    weight *= self._e_pot_avg[k]
+                    self._weights[k + 1] = self._weights[k] + weight
                     break
 
         return
@@ -413,7 +435,97 @@ class ST(object):
         )
         values = [temperature] + self.weights
         print(
-            ("%d\t" % self.simulation.currentStep)
-            + "\t".join("%g" % v for v in values),
+            f"{self.simulation.currentStep}," + ",".join("%g" % v for v in values),
             file=self._out,
         )
+
+
+def run_st(
+    simulation,
+    topology,
+    generic_name,
+    tot_steps,
+    dt,
+    temperatures,
+    tempChangeInterval=100,
+    save_step_dcd=100000,
+    save_step_log=500,
+    overwrite=False,
+    save_checkpoint_steps=None,
+):
+    """
+    Run REST2 simulation
+
+    Parameters
+    ----------
+    sys_rest2 : Rest2 object
+        System to run
+    generic_name : str
+        Generic name for output files
+    tot_steps : int
+        Total number of steps to run
+    dt : float
+        Time step in fs
+    save_step_dcd : int, optional
+        Step to save dcd file, by default 100000
+    save_step_log : int, optional
+        Step to save log file, by default 500
+    save_step_rest2 : int, optional
+        Step to save rest2 file, by default 500
+    overwrite : bool, optional
+        If True, overwrite previous files, by default False
+    save_checkpoint_steps : int, optional
+        Step to save checkpoint file, by default None
+
+    """
+
+    if not overwrite and os.path.isfile(generic_name + "_final.xml"):
+        logger.info(
+            f"File {generic_name}_final.xml exists already, skip simulate() step"
+        )
+        simulation.loadState(generic_name + "_final.xml")
+        return
+    elif not overwrite and os.path.isfile(generic_name + ".xml"):
+        logger.info(f"File {generic_name}.xml exists, restart run_ST()")
+        simulation.loadState(generic_name + ".xml")
+
+        restart_file = [generic_name + ".csv"]
+        restart_file_full = [f"{generic_name}_full.csv"]
+
+        # Get part number
+        part = 2
+        while os.path.isfile(f"{generic_name}_part_{part}.csv"):
+            restart_file.append(f"{generic_name}_part_{part}.csv")
+            restart_file_full.append(f"{generic_name}_full_part_{part}.csv")
+            part += 1
+
+        reportFile = f"{generic_name}_full_part_{part}.csv"
+
+    else:
+        restart_file = None
+        restart_file_full = None
+        reportFile = f"{generic_name}_full.csv"
+
+    simulation.reporters = []
+
+    st = ST(
+        simulation,
+        temperatures=temperatures,
+        tempChangeInterval=tempChangeInterval,  # 4ps
+        reportFile=reportFile,
+        reportInterval=save_step_log,
+        restart_files=restart_file,
+        restart_files_full=restart_file_full,
+    )
+
+    simulate(
+        st.simulation,
+        topology,
+        tot_steps,
+        dt,
+        generic_name,
+        save_step_log=save_step_log,
+        save_step_dcd=save_step_dcd,
+        remove_reporters=False,
+        save_checkpoint_steps=save_checkpoint_steps,
+    )

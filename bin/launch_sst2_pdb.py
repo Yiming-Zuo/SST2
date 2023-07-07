@@ -17,7 +17,7 @@ from openmm import LangevinMiddleIntegrator, unit
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../src/')))
 
 from SST2.rest2 import REST2, run_rest2
-from SST2.sst2 import run_sst2, compute_temperature_list
+from SST2.sst2 import run_sst2
 import SST2.tools as tools
 
 # Logging
@@ -70,9 +70,9 @@ def parser_input():
     parser.add_argument('-log_time',
                         action="store",
                         dest="log_time",
-                        help='SST2 log save time interval, default=1.0 (ps)',
+                        help='ST log save time interval, default= temp_time=2.0 (ps)',
                         type=float,
-                        default=1.0)
+                        default=None)
     parser.add_argument('-min_temp',
                         action="store",
                         dest="min_temp",
@@ -198,7 +198,8 @@ if __name__ == "__main__":
         tot_steps=nsteps,
         save_step_dcd=100000,
         save_step_log=10000,
-        save_step_rest2=500)
+        save_step_rest2=500,
+        remove_reporters=False,)
 
 
 
@@ -208,9 +209,10 @@ if __name__ == "__main__":
 
     if args.temp_num is None and args.temp_list is None:
         ladder_num = tools.compute_ladder_num(
-            f"{OUT_PATH}/{name}_equi_water",
+            f"{OUT_PATH}/{name}_equi_water_rest2",
             temperature,
-            args.last_temp)#
+            args.last_temp,
+            sst2_score=True)
         temperatures = None
     elif args.temp_list is not None:
         ladder_num = len(args.temp_list)
@@ -223,16 +225,20 @@ if __name__ == "__main__":
     save_step_dcd = 10000
     # save_step_log = 100
 
-    save_step_log = int(args.log_time / dt.in_units_of(unit.picosecond)._value)
-    print(f"Save log file interval = {save_step_log}")
-
     tempChangeInterval = int(args.temp_time / dt.in_units_of(unit.picosecond)._value)
     print(f"Temperature change interval = {tempChangeInterval}")
+
+    if args.log_time is not None:
+        save_step_log = int(args.log_time / dt.in_units_of(unit.picosecond)._value)
+    else:
+        save_step_log = tempChangeInterval
+
+    print(f"Log save interval = {save_step_log}")
 
     save_check_steps = int(500.0 * unit.nanoseconds / dt)
     print(f"Save checkpoint every {save_check_steps} steps")
 
-    temp_list = compute_temperature_list(
+    temp_list = tools.compute_temperature_list(
         minTemperature=args.min_temp,
         maxTemperature=args.last_temp,
         numTemperatures=ladder_num,

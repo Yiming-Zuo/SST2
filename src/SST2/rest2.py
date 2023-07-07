@@ -14,12 +14,7 @@ import openmm
 from openmm import unit
 import openmm.app as app
 
-from .tools import (
-    setup_simulation,
-    create_system_simulation,
-    get_forces,
-    run_sim_check_time,
-)
+from .tools import setup_simulation, create_system_simulation, get_forces, simulate
 
 # Logging
 logger = logging.getLogger(__name__)
@@ -48,7 +43,7 @@ class Rest2Reporter(object):
     def __init__(self, file, reportInterval, rest2):
         self._out = open(file, "w", buffering=1)
         self._out.write(
-            "ps,Solute scaled(kJ/mol),Solute not scaled(kJ/mol),Solvent(kJ/mol),Solute-Solvent(kJ/mol)\n"
+            "Step,Lambda,Solute scaled(kJ/mol),Solute not scaled(kJ/mol),Solvent(kJ/mol),Solute-Solvent(kJ/mol)\n"
         )
         self._reportInterval = reportInterval
         self._rest2 = rest2
@@ -85,12 +80,13 @@ class Rest2Reporter(object):
 
         # E_solute_scaled, E_solute_not_scaled, E_solvent, solvent_solute_nb
 
-        time = state.getTime().value_in_unit(unit.picosecond)
+        step = state.getStepCount()
         self._out.write(
-            f"{time},{energies[0].value_in_unit(unit.kilojoule_per_mole)},"
-            f"{energies[1].value_in_unit(unit.kilojoule_per_mole)},"
-            f"{energies[2].value_in_unit(unit.kilojoule_per_mole)},"
-            f"{energies[3].value_in_unit(unit.kilojoule_per_mole)}\n"
+            f"{step},{self._rest2.scale:.3f},"
+            f"{energies[0].value_in_unit(unit.kilojoule_per_mole):.2f},"
+            f"{energies[1].value_in_unit(unit.kilojoule_per_mole):.2f},"
+            f"{energies[2].value_in_unit(unit.kilojoule_per_mole):.2f},"
+            f"{energies[3].value_in_unit(unit.kilojoule_per_mole):.2f}\n"
         )
 
 
@@ -861,8 +857,9 @@ def run_rest2(
     save_step_dcd=100000,
     save_step_log=500,
     save_step_rest2=500,
-    rest2_reporter=True,
     overwrite=False,
+    remove_reporters=True,
+    add_REST2_reporter=True,
     save_checkpoint_steps=None,
 ):
     """
@@ -884,8 +881,6 @@ def run_rest2(
         Step to save log file, by default 500
     save_step_rest2 : int, optional
         Step to save rest2 file, by default 500
-    rest2_reporter : bool, optional
-        If True, save rest2 file, by default True
     overwrite : bool, optional
         If True, overwrite previous files, by default False
     save_checkpoint_steps : int, optional
@@ -893,7 +888,36 @@ def run_rest2(
 
     """
 
+    if not overwrite and os.path.isfile(generic_name + "_final.xml"):
+        logger.info(
+            f"File {generic_name}_final.xml exists already, skip simulate() step"
+        )
+        sys_rest2.simulation.loadState(generic_name + "_final.xml")
+        return
+
+    new_reporter = []
+    if add_REST2_reporter:
+        new_reporter = [
+            Rest2Reporter(f"{generic_name}_rest2.csv", save_step_rest2, sys_rest2)
+        ]
+
+    simulate(
+        sys_rest2.simulation,
+        sys_rest2.topology,
+        tot_steps,
+        dt,
+        generic_name,
+        additional_reporters=new_reporter,
+        save_step_log=save_step_log,
+        save_step_dcd=save_step_dcd,
+        remove_reporters=remove_reporters,
+        save_checkpoint_steps=save_checkpoint_steps,
+    )
+
+    """
+
     tot_steps = np.ceil(tot_steps)
+    final_step = tot_steps
 
     if not overwrite and os.path.isfile(generic_name + "_final.xml"):
         logger.info(
@@ -940,7 +964,7 @@ def run_rest2(
     data_reporter = app.StateDataReporter(
         f"{out_name}.csv",
         save_step_log,
-        totalSteps=tot_steps,
+        totalSteps=final_step,
         step=True,
         potentialEnergy=True,
         totalEnergy=True,
@@ -959,7 +983,7 @@ def run_rest2(
         temperature=True,
         speed=True,
         remainingTime=True,
-        totalSteps=tot_steps,
+        totalSteps=final_step,
     )
     check_reporter = app.CheckpointReporter(
         f"{out_name}.xml", save_step_dcd, writeState=True
@@ -997,6 +1021,8 @@ def run_rest2(
         positions[: sys_rest2.topology.getNumAtoms()],
         open(f"{generic_name}.pdb", "w"),
     )
+
+    """
 
 
 if __name__ == "__main__":

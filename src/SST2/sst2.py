@@ -34,18 +34,19 @@ class SST2Reporter(object):
         self.sst2 = sst2
 
     def describeNextReport(self, simulation):
-        sst2 = self.sst2
         steps1 = (
-            sst2.tempChangeInterval - simulation.currentStep % sst2.tempChangeInterval
+            self.sst2.tempChangeInterval
+            - simulation.currentStep % self.sst2.tempChangeInterval
         )
-        steps2 = sst2.reportInterval - simulation.currentStep % sst2.reportInterval
+        steps2 = (
+            self.sst2.reportInterval - simulation.currentStep % self.sst2.reportInterval
+        )
         steps = min(steps1, steps2)
         isUpdateAttempt = steps1 == steps
         return (steps, False, isUpdateAttempt, False, isUpdateAttempt)
 
     def report(self, simulation, state):
-        st = self.sst2
-        energie_group = st.rest2.compute_all_energies()
+        energie_group = self.sst2.rest2.compute_all_energies()
         # energie = st.rest2.get_customPotEnergie()
         # E = Bi*Epp + (B0Bi)**0.5 Epw
         # print(energie_group)
@@ -53,20 +54,21 @@ class SST2Reporter(object):
         #    (self.sst2.inverseTemperatures[self.sst2.currentTemperature]*self.sst2.inverseTemperatures[0])**0.5 * energie_group[2]
         # energie *= unit.kilojoule / unit.mole
         # print('Energie', energie)
-        st._e_num[st.currentTemperature] += 1
-        st._e_solute_avg[st.currentTemperature] += (
-            energie_group[0] - st._e_solute_avg[st.currentTemperature]
-        ) / st._e_num[st.currentTemperature]
-        st._e_solute_solv_avg[st.currentTemperature] += (
-            energie_group[3] - st._e_solute_solv_avg[st.currentTemperature]
-        ) / st._e_num[st.currentTemperature]
+        self.sst2._e_num[self.sst2.currentTemperature] += 1
+        self.sst2._e_solute_avg[self.sst2.currentTemperature] += (
+            energie_group[0] - self.sst2._e_solute_avg[self.sst2.currentTemperature]
+        ) / self.sst2._e_num[self.sst2.currentTemperature]
+        self.sst2._e_solute_solv_avg[self.sst2.currentTemperature] += (
+            energie_group[3]
+            - self.sst2._e_solute_solv_avg[self.sst2.currentTemperature]
+        ) / self.sst2._e_num[self.sst2.currentTemperature]
         # print(energie_group[0], energie_group[3])
         # print([ener._value for ener in st._e_solute_avg])
         # print([ener._value for ener in st._e_solute_solv_avg])
-        if simulation.currentStep % st.reportInterval == 0:
-            st._writeReport(energie_group)
-        if simulation.currentStep % st.tempChangeInterval == 0:
-            st._attemptTemperatureChange(energie_group[0], energie_group[3])
+        if simulation.currentStep % self.sst2.reportInterval == 0:
+            self.sst2._writeReport(energie_group)
+        if simulation.currentStep % self.sst2.tempChangeInterval == 0:
+            self.sst2._attemptTemperatureChange(energie_group[0], energie_group[3])
 
 
 class SST2(object):
@@ -244,7 +246,7 @@ class SST2(object):
         # Write out the header line.
 
         headers = [
-            "Steps",
+            "Step",
             "Aim Temp (K)",
             "E solute scaled (kJ/mole)",
             "E solute not scaled (kJ/mole)",
@@ -262,6 +264,11 @@ class SST2(object):
             Files to read restart information to, specified as a file name
         restart_files_full: string
             Full Rest2 files to read restart information to, specified as a file name
+
+        Returns
+        -------
+        first_temp_index: int
+            Index of the last used temperature to use
         """
         numTemperatures = len(self.temperatures)
         # Initialize the energy arrays.
@@ -552,13 +559,12 @@ def run_sst2(
     run_rest2(
         sst2.rest2,
         f"{generic_name}_sst2",
-        dt=dt,
         tot_steps=tot_steps,
-        # topology=pdb.topology, # To fix !!!
+        dt=dt,
         save_step_dcd=save_step_dcd,
         save_step_log=save_step_log,
-        rest2_reporter=False,
-        save_step_rest2=500,
+        save_step_rest2=reportInterval,
+        add_REST2_reporter=False,
+        remove_reporters=False,
         save_checkpoint_steps=save_checkpoint_steps,
     )
-

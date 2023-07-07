@@ -421,65 +421,6 @@ def minimize(simulation, out_pdb, topology, maxIterations=10000, overwrite=False
     )
 
 
-def run_sim_check_time(
-    simulation, nsteps, dt, save_checkpoint_steps=None, chekpoint_name=None
-):
-    """Run a simulation and check the time
-
-    Parameters
-    ----------
-    simulation : openmm.app.Simulation
-        Simulation object
-    nsteps : int
-        Number of steps
-    dt : unit.Quantity
-        Time step
-    save_checkpoint_steps : int
-        Number of steps between each checkpoint
-    chekpoint_name : str
-        Name of the checkpoint file
-
-    """
-
-    print("Timing %d steps of integration..." % nsteps)
-    initial_time = time.time()
-    tot_steps = nsteps
-
-    if save_checkpoint_steps is not None:
-        iter_num = int(np.ceil(nsteps / save_checkpoint_steps))
-        print(nsteps, save_checkpoint_steps, iter_num)
-    else:
-        iter_num = 1
-        save_checkpoint_steps = nsteps
-
-    for i in range(iter_num):
-        if nsteps > save_checkpoint_steps:
-            simulation.step(save_checkpoint_steps)
-        else:
-            simulation.step(nsteps)
-
-        simulation.saveState(chekpoint_name + f"_{i:04d}.xml")
-
-        nsteps -= save_checkpoint_steps
-
-    final_time = time.time()
-    elapsed_time = (final_time - initial_time) * unit.seconds
-    elapsed_time_val = elapsed_time.value_in_unit(unit.seconds)
-
-    dt_val = dt.value_in_unit(unit.femtoseconds)
-    tot_time_val = (tot_steps * dt).value_in_unit(unit.nanoseconds)
-
-    perfomance = (
-        (tot_steps * dt).value_in_unit(unit.nanoseconds)
-    ) / elapsed_time.value_in_unit(unit.day)
-
-    print(
-        f"{int(tot_steps):d} steps of {dt_val:.1f} fs timestep"
-        + f" ({tot_time_val:.1f} ns) took {elapsed_time_val:.1f}"
-        + f" s : {perfomance:.1f} ns/day"
-    )
-
-
 def setup_simulation(system, position, topology, integrator, platform_name="CUDA"):
     """Creates a simulation object
 
@@ -572,14 +513,14 @@ def get_forces(system, simulation):
     return forces_dict
 
 
-def compute_ladder_num(generic_name, min_temp, max_temp):
+def compute_ladder_num(generic_name, min_temp, max_temp, sst2_score=False):
     if type(min_temp) not in [int, float]:
         min_temp = min_temp._value
     if type(max_temp) not in [int, float]:
         max_temp = max_temp._value
 
-    logger.info(f"- Extract potential energy from {generic_name}_rest2.csv")
-    df_sim = pd.read_csv(generic_name + "_rest2.csv")
+    logger.info(f"- Extract potential energy from {generic_name}.csv")
+    df_sim = pd.read_csv(generic_name + ".csv")
 
     # Get part number
     part = 2
@@ -593,15 +534,19 @@ def compute_ladder_num(generic_name, min_temp, max_temp):
         part += 1
 
     # Extract potential energy
-    logger.info("- Extract potential energy")
-    df_sim["Solute(kJ/mol)"] = (
-        df_sim["Solute scaled(kJ/mol)"] + df_sim["Solute not scaled(kJ/mol)"]
-    )
-    df_sim["new_pot"] = (
-        df_sim["Solute(kJ/mol)"]
-        + 0.5 * (min_temp / min_temp) ** 0.5 * df_sim["Solute-Solvent(kJ/mol)"]
-    )
-    E_pot = df_sim["new_pot"].mean()
+    if sst2_score:
+        logger.info("- Extract potential energy")
+        df_sim["Solute(kJ/mol)"] = (
+            df_sim["Solute scaled(kJ/mol)"] + df_sim["Solute not scaled(kJ/mol)"]
+        )
+        df_sim["new_pot"] = (
+            df_sim["Solute(kJ/mol)"]
+            + 0.5 * (min_temp / min_temp) ** 0.5 * df_sim["Solute-Solvent(kJ/mol)"]
+        )
+        E_pot = df_sim["new_pot"].mean()
+    else:
+        E_pot = df_sim["Potential Energy (kJ/mole)"].mean()
+
     logger.info(f"Average Epot = {E_pot:.2e} KJ.mol-1")
     E_pot *= 8.314462618e-3
     logger.info(f"Average Epot = {E_pot:.2e} Kb")
@@ -685,3 +630,198 @@ def compute_temperature_list(
             ]
 
     return temperatures
+
+
+def simulate(
+    simulation,
+    topology,
+    tot_steps,
+    dt,
+    generic_name,
+    additional_reporters=[],
+    save_step_dcd=10000,
+    save_step_log=10000,
+    remove_reporters=True,
+    save_checkpoint_steps=None,
+    overwrite=False,
+):
+    """Run the simulation.
+
+    Parameters
+    ----------
+    simulation : openmm.app.Simulation
+        Simulation object.
+    topology : openmm.app.Topology
+        Topology object.
+    tot_steps : int
+        Total number of steps to run.
+    dt : float
+        Time step.
+    generic_name : str
+        Generic name for output files.
+    additional_reporters : list, optional
+        List of additional reporters. The default is [].
+    save_step_dcd : int, optional
+        Step to save dcd file. The default is 10000.
+    save_step_log : int, optional
+        Step to save log file. The default is 10000.
+    save_checkpoint_steps : int, optional
+        Step to save consecutive checkpoint file. The default is None.
+    overwrite : bool, optional
+        Overwrite previous simulation. The default is False.
+    """
+    tot_steps = int(tot_steps)
+    final_step = tot_steps
+
+    if not overwrite and os.path.isfile(generic_name + "_final.xml"):
+        logger.info(
+            f"File {generic_name}_final.xml exists already, skip simulate() step"
+        )
+        simulation.loadState(generic_name + "_final.xml")
+        return
+    elif not overwrite and os.path.isfile(generic_name + ".xml"):
+        logger.info(f"File {generic_name}.xml exists, restart simulate()")
+        simulation.loadState(f"{generic_name}.xml")
+
+        # Get part number
+        part = 2
+        last_out_data = generic_name + ".csv"
+        while os.path.isfile(f"{generic_name}_part_{part}.csv"):
+            last_out_data = f"{generic_name}_part_{part}.csv"
+            part += 1
+
+        # Get last step of checkpoint:
+        df_sim = pd.read_csv(last_out_data)
+        chk_step = df_sim['#"Step"'][df_sim['#"Step"'] % save_step_dcd == 0].iloc[-1]
+        simulation.currentStep = chk_step
+
+        tot_steps -= chk_step
+        out_name = f"{generic_name}_part_{part}"
+    else:
+        simulation.currentStep = 0
+        out_name = generic_name
+
+    dcd_reporter = app.DCDReporter(f"{out_name}.dcd", save_step_dcd)
+
+    data_reporter = app.StateDataReporter(
+        f"{out_name}.csv",
+        save_step_log,
+        totalSteps=final_step,
+        step=True,
+        potentialEnergy=True,
+        totalEnergy=True,
+        speed=True,
+        temperature=True,
+    )
+
+    stdout_reporter = app.StateDataReporter(
+        sys.stdout,
+        save_step_dcd,
+        step=True,
+        temperature=True,
+        speed=True,
+        remainingTime=True,
+        totalSteps=final_step,
+    )
+
+    check_reporter = app.CheckpointReporter(
+        f"{out_name}.xml", save_step_dcd, writeState=True
+    )
+
+    # Simulation
+    if remove_reporters:
+        simulation.reporters = []
+    simulation.reporters.append(dcd_reporter)
+    simulation.reporters.append(stdout_reporter)
+    simulation.reporters.append(data_reporter)
+    simulation.reporters.append(check_reporter)
+
+    for reporter in additional_reporters:
+        simulation.reporters.append(reporter)
+
+    logger.info(f"Launch simulation of {tot_steps} steps")
+
+    run_sim_check_time(
+        simulation,
+        tot_steps,
+        dt,
+        save_checkpoint_steps=save_checkpoint_steps,
+        chekpoint_name=generic_name,
+    )
+
+    # simulation.step(tot_steps)
+
+    simulation.saveState(generic_name + "_final.xml")
+
+    # Save position:
+    positions = simulation.context.getState(
+        getVelocities=False,
+        getPositions=True,
+        getForces=False,
+        getEnergy=False,
+        getParameters=False,
+        groups=-1,
+    ).getPositions()
+
+    app.PDBFile.writeFile(
+        topology, positions[: topology.getNumAtoms()], open(f"{generic_name}.pdb", "w")
+    )
+
+
+def run_sim_check_time(
+    simulation, nsteps, dt, save_checkpoint_steps=None, chekpoint_name=None
+):
+    """Run a simulation and check the time
+
+    Parameters
+    ----------
+    simulation : openmm.app.Simulation
+        Simulation object
+    nsteps : int
+        Number of steps
+    dt : unit.Quantity
+        Time step
+    save_checkpoint_steps : int
+        Number of steps between each checkpoint
+    chekpoint_name : str
+        Name of the checkpoint file
+
+    """
+
+    print("Timing %d steps of integration..." % nsteps)
+    initial_time = time.time()
+    tot_steps = nsteps
+
+    if save_checkpoint_steps is not None:
+        iter_num = int(np.ceil(nsteps / save_checkpoint_steps))
+        print(nsteps, save_checkpoint_steps, iter_num)
+    else:
+        iter_num = 1
+        save_checkpoint_steps = nsteps
+
+    for i in range(iter_num):
+        if nsteps > save_checkpoint_steps:
+            simulation.step(save_checkpoint_steps)
+        else:
+            simulation.step(nsteps)
+
+        simulation.saveState(chekpoint_name + f"_{i:04d}.xml")
+
+        nsteps -= save_checkpoint_steps
+
+    final_time = time.time()
+    elapsed_time = (final_time - initial_time) * unit.seconds
+    elapsed_time_val = elapsed_time.value_in_unit(unit.seconds)
+
+    dt_val = dt.value_in_unit(unit.femtoseconds)
+    tot_time_val = (tot_steps * dt).value_in_unit(unit.nanoseconds)
+
+    perfomance = (
+        (tot_steps * dt).value_in_unit(unit.nanoseconds)
+    ) / elapsed_time.value_in_unit(unit.day)
+
+    print(
+        f"{int(tot_steps):d} steps of {dt_val:.1f} fs timestep"
+        + f" ({tot_time_val:.1f} ns) took {elapsed_time_val:.1f}"
+        + f" s : {perfomance:.1f} ns/day"
+    )

@@ -6,13 +6,13 @@ Tests for rest2 functions
 """
 
 import os
+import pandas as pd
 import pytest
 
 import openmm
 from openmm import unit
 import openmm.app as app
 
-import pdb_numpy
 
 import SST2.tools as tools
 import SST2.rest2 as rest2
@@ -93,15 +93,15 @@ def test_peptide_protein_complex(tmp_path):
     rest2.run_rest2(
         sys_rest2,
         os.path.join(tmp_path, f"{name}_equi_water"),
-        dt=dt,
         tot_steps=nsteps,
+        dt=dt,
         save_step_dcd=100000,
         save_step_log=10000,
         save_step_rest2=500,
     )
 
     ladder_num = tools.compute_ladder_num(
-        os.path.join(tmp_path, f"{name}_equi_water"), 300, 500
+        os.path.join(tmp_path, f"{name}_equi_water_rest2"), 300, 500, sst2_score=True
     )
 
     assert ladder_num == 3
@@ -128,7 +128,7 @@ def test_peptide_protein_complex(tmp_path):
     save_step_dcd = 1000
     save_step_log = 100
     tempChangeInterval = int(2.0 * unit.picosecond / dt.in_units_of(unit.picosecond))
-    save_check_steps = 1000
+    save_check_steps = 5000
 
     sst2.run_sst2(
         sys_rest2,
@@ -145,3 +145,42 @@ def test_peptide_protein_complex(tmp_path):
         overwrite=False,
         save_checkpoint_steps=save_check_steps,
     )
+
+    print(tmp_path)
+
+    # Check if the output files are created
+    assert os.path.exists(os.path.join(tmp_path, f"{name}_sst2.dcd"))
+    assert os.path.exists(os.path.join(tmp_path, f"{name}_sst2.pdb"))
+    assert os.path.exists(os.path.join(tmp_path, f"{name}_sst2.xml"))
+
+    file_path = os.path.join(tmp_path, f"{name}_sst2.csv")
+    assert os.path.exists(file_path)
+    num_lines = sum(1 for _ in open(file_path))
+    assert num_lines == tot_steps / save_step_log + 1
+
+    file_path = os.path.join(tmp_path, f"{name}_sst2_full.csv")
+    assert os.path.exists(file_path)
+    num_lines = sum(1 for _ in open(file_path))
+    assert num_lines == tot_steps / save_step_log + 1
+
+    ener_df = pd.read_csv(file_path)
+    assert ener_df.shape[0] == tot_steps / save_step_log
+    assert ener_df["Step"].iloc[-1] == tot_steps
+    assert ener_df["Aim Temp (K)"].max() == 500.0
+    assert ener_df["Aim Temp (K)"].min() == 300.0
+    assert ener_df["E solute scaled (kJ/mole)"].mean() == pytest.approx(-709, abs=100)
+    assert ener_df["E solute not scaled (kJ/mole)"].mean() == pytest.approx(
+        448.0, abs=50
+    )
+    assert ener_df["E solvent (kJ/mole)"].mean() == pytest.approx(-37548, abs=5000)
+    assert ener_df["E solvent-solute (kJ/mole)"].mean() == pytest.approx(-2272, abs=100)
+
+    file_path = os.path.join(tmp_path, f"{name}_sst2_final.xml")
+    assert os.path.exists(file_path)
+    num_lines = sum(1 for _ in open(file_path))
+    assert num_lines == pytest.approx(5770, abs=100)
+
+    file_path = os.path.join(tmp_path, f"{name}_sst2.pdb")
+    assert os.path.exists(file_path)
+    num_lines = sum(1 for _ in open(file_path))
+    assert num_lines == pytest.approx(2878, abs=100)

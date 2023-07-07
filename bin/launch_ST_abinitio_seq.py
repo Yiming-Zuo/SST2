@@ -1,22 +1,19 @@
 import argparse
-import copy
 import numpy as np
-import math
+import time
 import os
 import sys
 import logging
 import pandas as pd
-from io import StringIO
 
-
-from openmm.app import PDBFile, ForceField
-from openmm import LangevinMiddleIntegrator, unit
+from openmm.app import PDBFile, ForceField, Simulation
+from openmm import LangevinMiddleIntegrator, unit, Platform
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../src/')))
 
-from SST2.rest2 import REST2, run_rest2
-from SST2.sst2 import run_sst2
+from SST2.st import ST, run_st
 import SST2.tools as tools
+
 
 # Logging
 logger = logging.getLogger(__name__)
@@ -55,7 +52,7 @@ def parser_input():
     parser.add_argument('-time',
                         action="store",
                         dest="time",
-                        help='SST2 time, default=10.000 (ns)',
+                        help='ST time, default=10.000 (ns)',
                         type=float,
                         default=10000)
     parser.add_argument('-temp_list',
@@ -68,7 +65,7 @@ def parser_input():
     parser.add_argument('-temp_time',
                         action="store",
                         dest="temp_time",
-                        help='SST2 temperature time change interval, default=2.0 (ps)',
+                        help='ST temperature time change interval, default=2.0 (ps)',
                         type=float,
                         default=2.0)
     parser.add_argument('-log_time',
@@ -80,12 +77,6 @@ def parser_input():
     parser.add_argument('-min_temp',
                         action="store",
                         dest="min_temp",
-                        help='Base temperature, default=300(K)',
-                        type=float,
-                        default=300)
-    parser.add_argument('-ref_temp',
-                        action="store",
-                        dest="ref_temp",
                         help='Base temperature, default=300(K)',
                         type=float,
                         default=300)
@@ -114,10 +105,6 @@ def parser_input():
                         type=float,
                         default=1.0)
     return parser
-
-
-
-
 
 if __name__ == "__main__":
 
@@ -148,7 +135,7 @@ if __name__ == "__main__":
                  impl_forcefield,
                  args.eq_time_impl,
                  f"{OUT_PATH}/{name}_implicit_equi",
-                 temp = args.ref_temp,)
+                 temp = args.min_temp,)
 
 
     forcefield_files = ['amber14/protein.ff14SB.xml', 'amber14/tip3p.xml']
@@ -160,78 +147,78 @@ if __name__ == "__main__":
                      forcefield=forcefield,
                      overwrite=False)
 
-    #########################
-    ### BASIC REST SYSTEM ###
-    #########################
+    ###########################
+    ### BASIC EQUILIBRATION ###
+    ###########################
 
     dt = 4 * unit.femtosecond
-    temperature = args.ref_temp * unit.kelvin
+    temperature = args.min_temp * unit.kelvin
+    max_temp = args.last_temp * unit.kelvin
     friction = args.friction / unit.picoseconds
     hydrogenMass = args.hmr * unit.amu
     rigidWater = True
     ewaldErrorTolerance = 0.0005
-    nsteps = args.eq_time_expl * unit.nanoseconds / dt
+    nsteps = int(np.ceil(args.eq_time_expl * unit.nanoseconds / dt))
 
     pdb = PDBFile(f"{OUT_PATH}/{name}_water.pdb")
 
-    # Get indices of the three sets of atoms.
-    all_indices = [int(i.index) for i in pdb.topology.atoms()]
-    solute_indices = [int(i.index) for i in pdb.topology.atoms() if i.residue.chain.id in ['A']]
-
     integrator = LangevinMiddleIntegrator(temperature, friction, dt)
+
 
     system = tools.create_sim_system(pdb,
         forcefield=forcefield,
         temp=temperature,
         h_mass=args.hmr,
         base_force_group=1)
+    
 
-    sys_rest2 = REST2(
-        system=system,
-        pdb=pdb,
-        forcefield=forcefield,
-        solute_index=solute_indices,
-        integrator=integrator,
-        dt=dt)
+    # Simulation Options
+    platform = Platform.getPlatformByName('CUDA')
+    #platform = Platform.getPlatformByName('OpenCL')
+    platformProperties = {'Precision': 'single'}
+
+    simulation = Simulation(
+        pdb.topology, system, 
+        integrator, 
+        platform, 
+        platformProperties)
+    simulation.context.setPositions(pdb.positions)
 
     logger.info(f"- Minimize system")
+    
     tools.minimize(
-        sys_rest2.simulation,
+        simulation,
         f"{OUT_PATH}/{name}_em_water.pdb",
         pdb.topology,
         maxIterations=10000,
         overwrite=False)
-
-    sys_rest2.simulation.context.setVelocitiesToTemperature(temperature)
+    
+    simulation.context.setVelocitiesToTemperature(temperature)
 
     save_step_log = 10000
     save_step_dcd = 10000
-    report_rest2_Interval = 500
+    tot_steps = int(np.ceil(args.eq_time_expl * unit.nanoseconds / dt))
 
-    logger.info(f"- Launch REST2 equilibration")
-
-    run_rest2(
-        sys_rest2,
-        f"{OUT_PATH}/{name}_equi_water",
-        tot_steps=nsteps,
+    logger.info(f"- Launch equilibration")
+    tools.simulate(
+        simulation,
+        pdb.topology,
+        tot_steps=tot_steps,
         dt=dt,
-        save_step_dcd=100000,
-        save_step_log=10000,
-        save_step_rest2=500,
-        remove_reporters=False,)
+        generic_name=f"{OUT_PATH}/{name}_explicit_equi",
+        save_step_log = save_step_log,
+        save_step_dcd = save_step_dcd,
+        )
 
-
-
-    ####################
-    # ##  SST2 SIM  ####
-    ####################
+    ##################
+    # ##  ST SIM  ####
+    ##################
 
     if args.temp_num is None and args.temp_list is None:
         ladder_num = tools.compute_ladder_num(
-            f"{OUT_PATH}/{name}_equi_water_rest2",
-            temperature,
-            args.last_temp,
-            sst2_score=True)
+                f"{OUT_PATH}/{name}_explicit_equi",
+                temperature,
+                args.last_temp)
         temperatures = None
     elif args.temp_list is not None:
         ladder_num = len(args.temp_list)
@@ -240,10 +227,8 @@ if __name__ == "__main__":
         temperatures = None
         ladder_num = args.temp_num
 
-    tot_steps = args.time * unit.nanoseconds / dt
-    print(f"Total steps = {tot_steps}")
+    tot_steps = int(np.ceil(args.time * unit.nanoseconds / dt))
     save_step_dcd = 10000
-    # save_step_log = 100
 
     tempChangeInterval = int(args.temp_time / dt.in_units_of(unit.picosecond)._value)
     print(f"Temperature change interval = {tempChangeInterval}")
@@ -254,29 +239,22 @@ if __name__ == "__main__":
         save_step_log = tempChangeInterval
 
     print(f"Log save interval = {save_step_log}")
-
-    save_check_steps = 500.0 * unit.nanoseconds / dt
-    print(f"Save checkpoint every {save_check_steps} steps")
-
+    
     temp_list = tools.compute_temperature_list(
         minTemperature=args.min_temp,
         maxTemperature=args.last_temp,
-        numTemperatures=ladder_num,
-        refTemperature=args.ref_temp)
-    print(temp_list)
+        numTemperatures=ladder_num)
+    
+    logger.info(f"- Launch ST simulation {temp_list}")
 
-
-    run_sst2(
-        sys_rest2,
-        f"{OUT_PATH}/{name}",
+    run_st(
+        simulation,
+        pdb.topology,
+        f"{OUT_PATH}/{name}_ST",
         tot_steps,
         dt=dt,
         temperatures=temp_list,
-        ref_temp=args.ref_temp,
         save_step_dcd=save_step_dcd,
         save_step_log=save_step_log,
-        save_step_rest2=save_step_log,
         tempChangeInterval=tempChangeInterval,
-        reportInterval=save_step_log,
-        overwrite=False,
-        save_checkpoint_steps=save_check_steps)
+        )

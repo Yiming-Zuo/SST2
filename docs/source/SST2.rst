@@ -28,6 +28,14 @@ SST2.sst2 module
    :undoc-members:
    :show-inheritance:
 
+SST2.st module
+----------------
+
+.. automodule:: SST2.st
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 SST2.tools module
 -----------------
 
