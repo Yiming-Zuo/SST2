@@ -7,6 +7,7 @@ Tests for rest2 functions
 
 import os
 import pytest
+import copy
 
 import openmm
 from openmm import unit
@@ -18,7 +19,7 @@ import SST2.tools as tools
 import SST2.rest2 as rest2
 
 
-from .datafiles import PDB_PROT_PEP_SOL
+from .datafiles import PDB_PROT_PEP_SOL, PDB_5AWL
 
 
 def test_peptide_protein_complex(tmp_path):
@@ -161,6 +162,28 @@ def test_peptide_protein_complex(tmp_path):
     integrator_rest = openmm.LangevinMiddleIntegrator(temperature, friction, dt)
     test = rest2.REST2(system, pdb, forcefield, solute_indices, integrator_rest)
 
+    assert test.system.getNumForces() == 8
+    assert test.solute_index == solute_indices
+    assert len(test.solute_index) == 74
+    assert len(test.solvent_index) == 11790
+    assert test.scale == 1.0
+    assert len(test.init_nb_param) == len(test.solute_index) + len(test.solvent_index)
+    assert len(test.init_nb_exept_index) == 387
+    assert len(test.init_nb_exept_value) == 387
+    assert len(test.init_nb_exept_solute_value) == 387
+    assert len(test.init_torsions_index) == 206
+    assert len(test.init_torsions_value) == 206
+    assert test.solute_torsion_force.getNumTorsions() == 206
+
+    # solute_scaled_torsion_force, solute_not_scaled_torsion_force, solvent_torsion_force
+    torsion_len = [206, 17, 5435]
+    force_i = 0
+
+    for force in test.system.getForces():
+        if isinstance(force, openmm.CustomTorsionForce):
+            assert force.getNumTorsions() == torsion_len[force_i]
+            force_i += 1
+
     print("REST2 forces 300K:")
     tools.print_forces(test.system, test.simulation)
     forces_rest2 = tools.get_forces(test.system, test.simulation)
@@ -286,6 +309,7 @@ def test_peptide_protein_complex(tmp_path):
 
     for scale in [0.5, 1.0, 1.5]:
         test.scale_nonbonded_torsion(scale)
+        assert test.scale == scale
         print(f"\nREST2 forces lambda = {scale:.1f}  Temp  = {300/scale:.1f} K\n")
         forces_rest2_new = tools.get_forces(test.system, test.simulation)
 
@@ -456,3 +480,108 @@ def test_peptide_protein_complex(tmp_path):
             )
             == 1.0
         )
+
+
+
+def test_5awl_omega_PRO(tmp_path):
+    """Test peptide protein complex"""
+
+    tolerance = 0.00001
+
+ 
+    name = "5awl"
+    OUT_PATH = tmp_path
+
+    if not os.path.exists(OUT_PATH):
+        os.makedirs(OUT_PATH)
+
+    tools.prepare_pdb(
+        PDB_5AWL, os.path.join(tmp_path, f"{name}_fixed.pdb"), pH=7.0, overwrite=False
+    )
+
+    forcefield_files = ["amber14/protein.ff14SB.xml", "amber14/tip3p.xml"]
+    forcefield = app.ForceField(*forcefield_files)
+
+    tools.create_water_box(
+        os.path.join(tmp_path, f"{name}_fixed.pdb"),
+        os.path.join(tmp_path, f"{name}_water.pdb"),
+        pad=1.5,
+        forcefield=forcefield,
+        overwrite=False,
+    )
+
+    dt = 4 * unit.femtosecond
+    temperature = 300 * unit.kelvin
+    friction = 1 / unit.picoseconds
+    hydrogenMass = 3 * unit.amu
+    rigidWater = True
+    ewaldErrorTolerance = 0.0005
+    nsteps = 0.01 * unit.nanoseconds / dt
+
+    pdb = app.PDBFile(os.path.join(tmp_path, f"{name}_water.pdb"))
+
+    # Get indices of the three sets of atoms.
+    all_indices = [int(i.index) for i in pdb.topology.atoms()]
+    solute_indices = [
+        int(i.index) for i in pdb.topology.atoms() if i.residue.chain.id in ["A"]
+    ]
+
+    integrator = openmm.LangevinMiddleIntegrator(temperature, friction, dt)
+
+    system = tools.create_sim_system(
+        pdb,
+        temp=temperature,
+        forcefield=forcefield,
+        h_mass=hydrogenMass,
+        base_force_group=1,
+    )
+
+    system_2 = copy.deepcopy(system)
+
+    test = rest2.REST2(
+        system=system,
+        pdb=pdb,
+        forcefield=forcefield,
+        solute_index=solute_indices,
+        integrator=integrator,
+        dt=dt,
+    )
+
+    assert test.system.getNumForces() == 9
+    assert test.solute_index == solute_indices
+    assert len(test.solute_index) == 166
+    assert len(test.solvent_index) == pytest.approx(2709, abs=100)
+    assert test.scale == 1.0
+    assert len(test.init_nb_param) == len(test.solute_index) + len(test.solvent_index)
+    assert len(test.init_nb_exept_index) == 899
+    assert len(test.init_nb_exept_value) == 899
+    assert len(test.init_nb_exept_solute_value) == 899
+    assert len(test.init_torsions_index) == 521
+    assert len(test.init_torsions_value) == 521
+    assert test.solute_torsion_force.getNumTorsions() == 521
+
+
+    integrator_2 = openmm.LangevinMiddleIntegrator(temperature, friction, dt)
+
+    test_2 = rest2.REST2(
+        system=system_2,
+        pdb=pdb,
+        forcefield=forcefield,
+        solute_index=solute_indices,
+        integrator=integrator_2,
+        dt=dt,
+        exclude_Pro_omegas=True,
+    )
+
+    assert test_2.system.getNumForces() == 9
+    assert test_2.solute_index == solute_indices
+    assert len(test_2.solute_index) == 166
+    assert len(test_2.solvent_index) ==  pytest.approx(2709, abs=100)
+    assert test_2.scale == 1.0
+    assert len(test_2.init_nb_param) == len(test_2.solute_index) + len(test_2.solvent_index)
+    assert len(test_2.init_nb_exept_index) == 899
+    assert len(test_2.init_nb_exept_value) == 899
+    assert len(test_2.init_nb_exept_solute_value) == 899
+    assert len(test_2.init_torsions_index) == 521 - 4
+    assert len(test_2.init_torsions_value) == 521 - 4
+    assert test_2.solute_torsion_force.getNumTorsions() == 521 - 4

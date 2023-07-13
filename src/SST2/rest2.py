@@ -134,7 +134,7 @@ class REST2:
     system_forces_solute : Solute Forces
         The solute forces
 
-    system_solvent : Solvent System]
+    system_solvent : Solvent System
         The solvent system
     simulation_solvent : Solvent Simulation
         The solvent simulation
@@ -172,6 +172,7 @@ class REST2:
         rigidWater=True,
         ewaldErrorTolerance=0.0005,
         hydrogenMass=1.0 * unit.amu,
+        exclude_Pro_omegas=False,
     ):
         """Initialize the REST2 class
 
@@ -219,6 +220,8 @@ class REST2:
             The Ewald error tolerance of the system, default is 0.0005
         hydrogenMass : float
             The hydrogen mass of the system, default is 1 amu
+        exclude_Pro_omegas : bool
+            The exclusion of the proline omegas scaling, default is False
         """
 
         self.system = system
@@ -244,9 +247,7 @@ class REST2:
         # Extract solute nonbonded index and values
         self.find_solute_nb_index()
         # Separate solute torsion from the solvent
-        self.separate_torsion_pot()
-        # Extract solute torsions index and values
-        self.find_torsions()
+        self.separate_torsion_pot(exclude_Pro_omegas=exclude_Pro_omegas)
         # Create separate solute and solvent simulation
         self.create_solute_solvent_simulation(
             forcefield=forcefield,
@@ -312,7 +313,7 @@ class REST2:
                     [iatom, jatom, chargeprod, sigma, epsilon]
                 )
 
-    def separate_torsion_pot(self):
+    def separate_torsion_pot(self, exclude_Pro_omegas=False):
         """Use in the REST2 case as it avoid to modify
         twice the torsion terms in the rest2 system and
         in the solute system.
@@ -331,7 +332,8 @@ class REST2:
 
         Parameters
         ----------
-        None
+        exclude_Pro_omegas : bool
+            The exclusion of the proline omegas scaling, default is False
 
         Returns
         -------
@@ -361,6 +363,24 @@ class REST2:
         original_torsion_force = self.system_forces["PeriodicTorsionForce"]
 
         bond_idxs = [sorted([i.index, j.index]) for i, j in self.topology.bonds()]
+
+        # Identify proline backbone atoms ():
+        if exclude_Pro_omegas:
+            # Get bonds C (Any) - N (PRO)
+            bond_idxs_pro = []
+            for i, j in self.topology.bonds():
+                if i.residue.name == "PRO" and i.name == "N" and j.name == "C":
+                    bond_idxs_pro.append(sorted([i.index, j.index]))
+                elif j.residue.name == "PRO" and j.name == "N" and i.name == "C":
+                    bond_idxs_pro.append(sorted([i.index, j.index]))
+
+            print("bond_idxs_pro", bond_idxs_pro)
+
+        # Store the original torsion parameters
+        torsion_index = 0
+        self.init_torsions_index = []
+        self.init_torsions_value = []
+
 
         for i in range(original_torsion_force.getNumTorsions()):
             (
@@ -393,10 +413,19 @@ class REST2:
                 and p4 in self.solvent_index
             )
 
-            if solute_in and not_improper:
+            not_pro_omega = True
+            if solute_in and not_improper and exclude_Pro_omegas:
+                if sorted([p2, p3]) in bond_idxs_pro:
+                    print("Proline omega torsion detected",p1, p2, p3, p4)
+                    not_pro_omega = False
+
+            if solute_in and not_improper and not_pro_omega:
                 solute_scaled_torsion_force.addTorsion(
                     p1, p2, p3, p4, [periodicity, phase, k]
                 )
+                self.init_torsions_index.append(torsion_index)
+                self.init_torsions_value.append([p1, p2, p3, p4, periodicity, phase, k])
+                torsion_index += 1
             elif solute_in:
                 solute_not_scaled_torsion_force.addTorsion(
                     p1, p2, p3, p4, [periodicity, phase, k]
@@ -420,61 +449,6 @@ class REST2:
         for count, force in enumerate(self.system.getForces()):
             if isinstance(force, openmm.PeriodicTorsionForce):
                 self.system.removeForce(count)
-
-    def find_torsions(self):
-        """Extract the initial solute torsion index and values.
-        As improper angles are not supposed to be scaled, here we extract only
-        the proper torsion angles.
-
-        To identify proper angles we use a trick from:
-        https://github.com/maccallumlab/meld/blob/master/meld/runner/transform/rest2.py
-
-        Parameters
-        ----------
-        None
-
-        Returns
-        -------
-        None
-
-        """
-
-        self.init_torsions_index = []
-        self.init_torsions_value = []
-
-        torsion_force = self.solute_torsion_force
-
-        bond_idxs = [sorted([i.index, j.index]) for i, j in self.topology.bonds()]
-
-        for i in range(torsion_force.getNumTorsions()):
-            (
-                p1,
-                p2,
-                p3,
-                p4,
-                [periodicity, phase, k],
-            ) = torsion_force.getTorsionParameters(i)
-
-            # Probably useless, to check
-            not_improper = (
-                sorted([p1, p2]) in bond_idxs
-                and sorted([p2, p3]) in bond_idxs
-                and sorted([p3, p4]) in bond_idxs
-            )
-
-            # Probably useless, to check
-            not_solvent = (
-                p1 in self.solute_index
-                and p2 in self.solute_index
-                and p3 in self.solute_index
-                and p4 in self.solute_index
-            )
-
-            if not_improper and not_solvent:
-                self.init_torsions_index.append(i)
-                self.init_torsions_value.append([p1, p2, p3, p4, periodicity, phase, k])
-
-        logger.info(f"Solute torsion number : {len(self.init_torsions_index)}")
 
     def create_solute_solvent_simulation(
         self,

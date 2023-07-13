@@ -109,6 +109,10 @@ def parser_input():
                         help='Langevin Integrator friction coefficient default=1.0 (ps-1)',
                         type=float,
                         default=1.0)
+    parser.add_argument('-exclude_Pro_omega',
+                        action="store_true",
+                        dest="exclude_Pro_omega",
+                        help='Exclude Proline omega dihedral scale angles')
     return parser
 
 if __name__ == "__main__":
@@ -173,7 +177,8 @@ if __name__ == "__main__":
         forcefield=forcefield,
         solute_index=solute_indices,
         integrator=integrator,
-        dt=dt)
+        dt=dt,
+        exclude_Pro_omegas=args.exclude_Pro_omega)
 
     logger.info(f"- Minimize system")
     tools.minimize(
@@ -199,7 +204,7 @@ if __name__ == "__main__":
         save_step_dcd=100000,
         save_step_log=10000,
         save_step_rest2=500,
-        remove_reporters=False,)
+        remove_reporters=False)
 
 
 

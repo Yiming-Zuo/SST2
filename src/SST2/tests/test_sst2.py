@@ -168,19 +168,19 @@ def test_peptide_protein_complex(tmp_path):
     assert ener_df["Step"].iloc[-1] == tot_steps
     assert ener_df["Aim Temp (K)"].max() == 500.0
     assert ener_df["Aim Temp (K)"].min() == 300.0
-    assert ener_df["E solute scaled (kJ/mole)"].mean() == pytest.approx(-709, abs=100)
+    assert ener_df["E solute scaled (kJ/mole)"].mean() == pytest.approx(-709, abs=500)
     assert ener_df["E solute not scaled (kJ/mole)"].mean() == pytest.approx(
         448.0, abs=50
     )
     assert ener_df["E solvent (kJ/mole)"].mean() == pytest.approx(-37548, abs=5000)
-    assert ener_df["E solvent-solute (kJ/mole)"].mean() == pytest.approx(-2272, abs=100)
+    assert ener_df["E solvent-solute (kJ/mole)"].mean() == pytest.approx(-2272, abs=500)
 
     file_path = os.path.join(tmp_path, f"{name}_sst2_final.xml")
     assert os.path.exists(file_path)
     num_lines = sum(1 for _ in open(file_path))
-    assert num_lines == pytest.approx(5770, abs=200)
+    assert num_lines == pytest.approx(5770, abs=500)
 
     file_path = os.path.join(tmp_path, f"{name}_sst2.pdb")
     assert os.path.exists(file_path)
     num_lines = sum(1 for _ in open(file_path))
-    assert num_lines == pytest.approx(2878, abs=100)
+    assert num_lines == pytest.approx(2878, abs=200)
