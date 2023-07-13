@@ -255,7 +255,7 @@ if __name__ == "__main__":
 
     print(f"Log save interval = {save_step_log}")
 
-    save_check_steps = 500.0 * unit.nanoseconds / dt
+    save_check_steps = int(500.0 * unit.nanoseconds / dt)
     print(f"Save checkpoint every {save_check_steps} steps")
 
     temp_list = tools.compute_temperature_list(

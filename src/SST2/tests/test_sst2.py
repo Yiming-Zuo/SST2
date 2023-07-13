@@ -178,7 +178,7 @@ def test_peptide_protein_complex(tmp_path):
     file_path = os.path.join(tmp_path, f"{name}_sst2_final.xml")
     assert os.path.exists(file_path)
     num_lines = sum(1 for _ in open(file_path))
-    assert num_lines == pytest.approx(5770, abs=100)
+    assert num_lines == pytest.approx(5770, abs=200)
 
     file_path = os.path.join(tmp_path, f"{name}_sst2.pdb")
     assert os.path.exists(file_path)

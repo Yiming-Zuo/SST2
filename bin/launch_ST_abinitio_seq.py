@@ -101,9 +101,9 @@ def parser_input():
     parser.add_argument('-friction',
                         action="store",
                         dest="friction",
-                        help='Langevin Integrator friction coefficient default=1.0 (ps-1)',
+                        help='Langevin Integrator friction coefficient default=10.0 (ps-1)',
                         type=float,
-                        default=1.0)
+                        default=10.0)
     return parser
 
 if __name__ == "__main__":
@@ -229,7 +229,6 @@ if __name__ == "__main__":
 
     tot_steps = int(np.ceil(args.time * unit.nanoseconds / dt))
     save_step_dcd = 10000
-
     tempChangeInterval = int(args.temp_time / dt.in_units_of(unit.picosecond)._value)
     print(f"Temperature change interval = {tempChangeInterval}")
 
@@ -239,7 +238,7 @@ if __name__ == "__main__":
         save_step_log = tempChangeInterval
 
     print(f"Log save interval = {save_step_log}")
-    
+
     temp_list = tools.compute_temperature_list(
         minTemperature=args.min_temp,
         maxTemperature=args.last_temp,
