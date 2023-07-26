@@ -560,6 +560,14 @@ def test_5awl_omega_PRO(tmp_path):
     assert len(test.init_torsions_value) == 521
     assert test.solute_torsion_force.getNumTorsions() == 521
 
+    torsion_len = [521, 46, 0]
+    force_i = 0
+
+    for force in test.system.getForces():
+        if isinstance(force, openmm.CustomTorsionForce):
+            assert force.getNumTorsions() == torsion_len[force_i]
+            force_i += 1
+
 
     integrator_2 = openmm.LangevinMiddleIntegrator(temperature, friction, dt)
 
@@ -585,3 +593,11 @@ def test_5awl_omega_PRO(tmp_path):
     assert len(test_2.init_torsions_index) == 521 - 4
     assert len(test_2.init_torsions_value) == 521 - 4
     assert test_2.solute_torsion_force.getNumTorsions() == 521 - 4
+
+    torsion_len = [521-4, 46+4, 0]
+    force_i = 0
+
+    for force in test_2.system.getForces():
+        if isinstance(force, openmm.CustomTorsionForce):
+            assert force.getNumTorsions() == torsion_len[force_i]
+            force_i += 1

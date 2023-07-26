@@ -72,7 +72,7 @@ def prepare_pdb(in_pdb, out_pdb, pH=7.0, overwrite=False):
     fixer.findMissingResidues()
     fixer.findNonstandardResidues()
     fixer.replaceNonstandardResidues()
-    fixer.removeHeterogens(False)
+    #fixer.removeHeterogens(False)
     fixer.findMissingAtoms()
     fixer.addMissingAtoms()
     fixer.addMissingHydrogens(pH)
@@ -512,6 +512,45 @@ def get_forces(system, simulation):
 
     return forces_dict
 
+def add_pos_restr(system, index_list, pdb_ref, k_rest, restr_force_group=None, constant_name="k"):
+    """Add position restraints to the system
+
+    Parameters
+    ----------
+    system : openmm.System
+        System object
+    index_list : list
+        List of indices to restrain
+    pdb_ref : openmm.app.PDBFile
+        Reference pdb file
+    k_rest : float
+        Force constant (KJ/mol/nm^2)
+    restr_force_group : int
+        Force group, default is 2
+    constant_name : str
+        Name of the force constant, default is k
+    
+    Returns
+    -------
+    restraint : openmm.CustomExternalForce
+        Restraint object
+    """
+
+
+    restraint = openmm.CustomExternalForce(f'{constant_name}*periodicdistance(x, y, z, x0, y0, z0)^2')
+    system.addForce(restraint)
+    restraint.addGlobalParameter(constant_name, k_rest*unit.kilojoules_per_mole/unit.nanometer**2)
+    restraint.addPerParticleParameter('x0')
+    restraint.addPerParticleParameter('y0')
+    restraint.addPerParticleParameter('z0')
+
+    for index in index_list:
+        restraint.addParticle(index, pdb_ref.positions[index])
+    
+    if restr_force_group is not None:
+        restraint.setForceGroup(restr_force_group)
+    
+    return restraint
 
 def compute_ladder_num(generic_name, min_temp, max_temp, sst2_score=False):
     if type(min_temp) not in [int, float]:
