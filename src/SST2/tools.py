@@ -732,7 +732,12 @@ def simulate(
         # Get last step of checkpoint:
         df_sim = pd.read_csv(last_out_data)
         chk_step = df_sim['#"Step"'][df_sim['#"Step"'] % save_step_dcd == 0].iloc[-1]
-        simulation.currentStep = chk_step
+
+        # Bug with dcd file and step larger than 2147483647
+        if chk_step >= 2147483647:
+            simulation.currentStep = 0
+        else:
+            simulation.currentStep = int(chk_step)
 
         tot_steps -= chk_step
         out_name = f"{generic_name}_part_{part}"
