@@ -402,7 +402,20 @@ def minimize(simulation, out_pdb, topology, maxIterations=10000, overwrite=False
     if not overwrite and os.path.isfile(out_pdb):
         logger.info(f"File {out_pdb} exists already, skip minimize() step")
         pdb = app.PDBFile(out_pdb)
-        simulation.context.setPositions(pdb.positions)
+
+        # In case virtual particle are present
+        # It is necessary to keep their coordinates
+        positions = simulation.context.getState(
+            getVelocities=False,
+            getPositions=True,
+            getForces=False,
+            getEnergy=False,
+            getParameters=False,
+            groups=-1,
+        ).getPositions()
+        positions[: topology.getNumAtoms()] = pdb.positions
+        simulation.context.setPositions(positions)
+
 
     simulation.minimizeEnergy(maxIterations=maxIterations)
 

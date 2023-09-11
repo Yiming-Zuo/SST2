@@ -9,6 +9,10 @@ To Do:
 - Add tests for tools
 - Need to treat the case where weights is not None and restart_files is not None
 
+BUG:
+    - the xml files are overwritten when nsteps is reset to 0 (because of dcd format)
+    - the restart nsteps is wrong when nsteps is reset to 0 (because of dcd format)
+
 ## Paper
 
 To Do:

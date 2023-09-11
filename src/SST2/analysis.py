@@ -33,9 +33,11 @@ def read_sst2_data(
     df_temp = pd.read_csv(f"{generic_name}_full.csv", usecols=fields, sep=full_sep)
     df_sim = pd.read_csv(f"{generic_name}.csv")
 
-    last_old_step = df_temp.iloc[df_temp.index[-1], 0]
 
     for i in range(2, part + 1):
+
+        last_old_step = df_temp.iloc[df_temp.index[-1], 0]
+
         print(f"Reading part {i}")
         df_sim_part = pd.read_csv(f"{generic_name}_part_{i}.csv")
         df_temp_part = pd.read_csv(
