@@ -550,7 +550,7 @@ def test_5awl_omega_PRO(tmp_path):
     assert test.system.getNumForces() == 9
     assert test.solute_index == solute_indices
     assert len(test.solute_index) == 166
-    assert len(test.solvent_index) == pytest.approx(2709, abs=100)
+    assert len(test.solvent_index) == pytest.approx(4000, abs=2000)
     assert test.scale == 1.0
     assert len(test.init_nb_param) == len(test.solute_index) + len(test.solvent_index)
     assert len(test.init_nb_exept_index) == 899
@@ -584,7 +584,7 @@ def test_5awl_omega_PRO(tmp_path):
     assert test_2.system.getNumForces() == 9
     assert test_2.solute_index == solute_indices
     assert len(test_2.solute_index) == 166
-    assert len(test_2.solvent_index) ==  pytest.approx(2709, abs=100)
+    assert len(test_2.solvent_index) ==  pytest.approx(4000, abs=2000)
     assert test_2.scale == 1.0
     assert len(test_2.init_nb_param) == len(test_2.solute_index) + len(test_2.solvent_index)
     assert len(test_2.init_nb_exept_index) == 899

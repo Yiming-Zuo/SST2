@@ -416,6 +416,7 @@ def minimize(simulation, out_pdb, topology, maxIterations=10000, overwrite=False
         positions[: topology.getNumAtoms()] = pdb.positions
         simulation.context.setPositions(positions)
 
+        return
 
     simulation.minimizeEnergy(maxIterations=maxIterations)
 
