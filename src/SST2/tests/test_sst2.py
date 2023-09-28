@@ -31,15 +31,15 @@ def test_peptide_protein_complex(tmp_path):
         os.makedirs(OUT_PATH)
 
     tools.prepare_pdb(
-        PDB_5AWL, os.path.join(tmp_path, f"{name}_fixed.pdb"), pH=7.0, overwrite=False
+        PDB_5AWL, os.path.join(tmp_path, f"{name}_fixed.cif"), pH=7.0, overwrite=False
     )
 
     forcefield_files = ["amber14/protein.ff14SB.xml", "amber14/tip3p.xml"]
     forcefield = app.ForceField(*forcefield_files)
 
     tools.create_water_box(
-        os.path.join(tmp_path, f"{name}_fixed.pdb"),
-        os.path.join(tmp_path, f"{name}_water.pdb"),
+        os.path.join(tmp_path, f"{name}_fixed.cif"),
+        os.path.join(tmp_path, f"{name}_water.cif"),
         pad=1.5,
         forcefield=forcefield,
         overwrite=False,
@@ -53,7 +53,7 @@ def test_peptide_protein_complex(tmp_path):
     ewaldErrorTolerance = 0.0005
     nsteps = 0.01 * unit.nanoseconds / dt
 
-    pdb = app.PDBFile(os.path.join(tmp_path, f"{name}_water.pdb"))
+    pdb = app.PDBxFile(os.path.join(tmp_path, f"{name}_water.cif"))
 
     # Get indices of the three sets of atoms.
     all_indices = [int(i.index) for i in pdb.topology.atoms()]
@@ -82,7 +82,7 @@ def test_peptide_protein_complex(tmp_path):
 
     tools.minimize(
         sys_rest2.simulation,
-        os.path.join(tmp_path, f"{name}_em_water.pdb"),
+        os.path.join(tmp_path, f"{name}_em_water.cif"),
         pdb.topology,
         maxIterations=1000,
         overwrite=False,
@@ -151,6 +151,7 @@ def test_peptide_protein_complex(tmp_path):
     # Check if the output files are created
     assert os.path.exists(os.path.join(tmp_path, f"{name}_sst2.dcd"))
     assert os.path.exists(os.path.join(tmp_path, f"{name}_sst2.pdb"))
+    assert os.path.exists(os.path.join(tmp_path, f"{name}_sst2.cif"))
     assert os.path.exists(os.path.join(tmp_path, f"{name}_sst2.xml"))
 
     file_path = os.path.join(tmp_path, f"{name}_sst2.csv")

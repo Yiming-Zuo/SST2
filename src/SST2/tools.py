@@ -45,7 +45,7 @@ def create_linear_peptide(seq, out_pdb):
     pep_coor.make_peptide(seq, out_pdb)
 
 
-def prepare_pdb(in_pdb, out_pdb, pH=7.0, overwrite=False):
+def prepare_pdb(in_pdb, out_cif, pH=7.0, overwrite=False):
     """Prepare a raw pdb file adding :
     - missing residues
     - add hydrogens at user defined pH
@@ -55,7 +55,7 @@ def prepare_pdb(in_pdb, out_pdb, pH=7.0, overwrite=False):
     ----------
     in_pdb : str
         Path to the input pdb file
-    out_pdb : str
+    out_cif : str
         Path to the output pdb file
     pH : float
         pH of the system, default is 7.0
@@ -63,8 +63,8 @@ def prepare_pdb(in_pdb, out_pdb, pH=7.0, overwrite=False):
         Overwrite the output file, default is False
     """
 
-    if not overwrite and os.path.isfile(out_pdb):
-        logger.info(f"File {out_pdb} exists already, skip prepare_pdb() step")
+    if not overwrite and os.path.isfile(out_cif):
+        logger.info(f"File {out_cif} exists already, skip prepare_pdb() step")
         return
 
     # Fix peptide structure
@@ -76,13 +76,14 @@ def prepare_pdb(in_pdb, out_pdb, pH=7.0, overwrite=False):
     fixer.findMissingAtoms()
     fixer.addMissingAtoms()
     fixer.addMissingHydrogens(pH)
-    app.PDBFile.writeFile(fixer.topology, fixer.positions, open(out_pdb, "w"))
+
+    app.PDBxFile.writeFile(fixer.topology, fixer.positions, open(out_cif, "w"))
 
     return
 
 
 def implicit_sim(
-    pdb_in,
+    cif_in,
     forcefield,
     time,
     out_generic_name,
@@ -99,8 +100,8 @@ def implicit_sim(
 
     Parameters
     ----------
-    pdb_in : str
-        Path to the input pdb file
+    cif_in : str
+        Path to the input cif file
     forcefield : openmm ForceField
         forcefield object
     time : float
@@ -123,24 +124,24 @@ def implicit_sim(
     None
     """
 
-    if not overwrite and os.path.isfile(f"{out_generic_name}.pdb"):
+    if not overwrite and os.path.isfile(f"{out_generic_name}.cif"):
         logger.info(
-            f"File {out_generic_name}.pdb exists already, skip implicit_sim() step"
+            f"File {out_generic_name}.cif exists already, skip implicit_sim() step"
         )
         return
 
-    pdb = app.PDBFile(pdb_in)
+    cif = app.PDBxFile(cif_in)
 
     system = forcefield.createSystem(
-        pdb.topology, nonbondedCutoff=3 * unit.nanometer, constraints=app.HBonds
+        cif.topology, nonbondedCutoff=3 * unit.nanometer, constraints=app.HBonds
     )
 
     tot_steps = int(1000 * time / 0.002)
 
     integrator = openmm.LangevinIntegrator(temp, 1 / unit.picosecond, dt)
 
-    simulation = app.Simulation(pdb.topology, system, integrator)
-    simulation.context.setPositions(pdb.positions)
+    simulation = app.Simulation(cif.topology, system, integrator)
+    simulation.context.setPositions(cif.positions)
 
     # Minimize
     simulation.minimizeEnergy(maxIterations=min_steps)
@@ -174,7 +175,7 @@ def implicit_sim(
         )
     )
 
-    logger.info(f"Launchinf implicit simulation of {time:.3f} ns or {tot_steps} steps")
+    logger.info(f"Launch implicit simulation of {time:.3f} ns or {tot_steps} steps")
 
     simulation.step(tot_steps)
 
@@ -188,16 +189,16 @@ def implicit_sim(
         groups=-1,
     ).getPositions()
 
-    app.PDBFile.writeFile(
-        pdb.topology,
-        positions[: pdb.topology.getNumAtoms()],
-        open(f"{out_generic_name}.pdb", "w"),
+    app.PDBxFile.writeFile(
+        cif.topology,
+        positions[: cif.topology.getNumAtoms()],
+        open(f"{out_generic_name}.cif", "w"),
     )
 
 
 def create_water_box(
-    in_pdb,
-    out_pdb,
+    in_cif,
+    out_cif,
     pad,
     forcefield,
     ionicStrength=0.15 * unit.molar,
@@ -205,14 +206,14 @@ def create_water_box(
     negativeIon="Cl-",
     overwrite=False,
 ):
-    """Add a water box around a prepared pdb file.
+    """Add a water box around a prepared cif file.
 
     Parameters
     ----------
-    in_pdb : str
-        Path to the input pdb file
-    out_pdb : str
-        Path to the output pdb file
+    in_cif : str
+        Path to the input cif file
+    out_cif : str
+        Path to the output cif file
     pad : float
         Padding around the peptide in nm
     forcefield : openmm ForceField
@@ -227,20 +228,31 @@ def create_water_box(
         Overwrite the output file, default is False
     """
 
-    pdb = app.PDBFile(in_pdb)
+    cif = app.PDBxFile(in_cif)
 
-    if not overwrite and os.path.isfile(out_pdb):
-        logger.info(f"File {out_pdb} exists already, skip create_water_box() step")
-        return pdb
+    if not overwrite and os.path.isfile(out_cif):
+        logger.info(f"File {out_cif} exists already, skip create_water_box() step")
+        return cif
 
-    modeller = app.Modeller(pdb.topology, pdb.positions)
+    # To avoid issue with clash with residues out of the box:
+    x_min = min([0*unit.nanometer] + [pos[0] for pos in cif.positions])
+    y_min = min([0*unit.nanometer] + [pos[1] for pos in cif.positions])
+    z_min = min([0*unit.nanometer] + [pos[2] for pos in cif.positions])
+    min_vec = openmm.Vec3(
+        x_min.value_in_unit(unit.nanometer),
+        y_min.value_in_unit(unit.nanometer),
+        z_min.value_in_unit(unit.nanometer)) * unit.nanometer
+    cif.positions = [ (pos - min_vec).value_in_unit(unit.nanometer) for pos in cif.positions] * unit.nanometer
+
+
+    modeller = app.Modeller(cif.topology, cif.positions)
 
     # Create Box
 
     boxVectors = None
     geompadding = pad * unit.nanometer
     maxSize = max(
-        max((pos[i] for pos in pdb.positions)) - min((pos[i] for pos in pdb.positions))
+        max((pos[i] for pos in cif.positions)) - min((pos[i] for pos in cif.positions))
         for i in range(3)
     )
     vectors = [
@@ -249,6 +261,7 @@ def create_water_box(
         openmm.Vec3(-1 / 3, unit.sqrt(2) / 3, unit.sqrt(6) / 3),
     ]
     boxVectors = [(maxSize + geompadding) * v for v in vectors]
+
     modeller.addSolvent(
         forcefield,
         boxVectors=boxVectors,
@@ -257,16 +270,20 @@ def create_water_box(
         negativeIon=negativeIon,
     )
 
-    with open(out_pdb, "w") as filout:
-        app.PDBFile.writeFile(modeller.topology, modeller.positions, filout, True)
-    pdb = app.PDBFile(out_pdb)
+    app.PDBxFile.writeFile(
+        modeller.topology,
+        modeller.positions,
+        open(out_cif, "w"),
+        True)
+    cif = app.PDBxFile(out_cif)
 
-    return pdb
+    return cif
 
 
 def create_system_simulation(
-    pdb_file_io,
+    file_io,
     forcefield,
+    cif_format=True,
     dt=2 * unit.femtosecond,
     temperature=300 * unit.kelvin,
     friction=1 / unit.picoseconds,
@@ -282,10 +299,12 @@ def create_system_simulation(
 
     Parameters
     ----------
-    pdb_file : str or StringIO
-        Path or StringIO of the pdb file
+    file_io : str or StringIO
+        Path or StringIO of the cif/pdb file
     forcefield : Openmm forcefield
         forcefield object
+    cif_format : bool
+        Is the file in cif format, default is True
     dt : unit.Quantity
         Time step, default is 2 fs
     temperature : unit.Quantity
@@ -315,7 +334,10 @@ def create_system_simulation(
         Simulation object
     """
 
-    pdb = app.PDBFile(pdb_file_io)
+    if cif_format:
+        pdb = app.PDBxFile(file_io)
+    else:
+        pdb = app.PDBFile(file_io)
 
     integrator = openmm.LangevinMiddleIntegrator(temperature, friction, dt)
 
@@ -336,7 +358,7 @@ def create_system_simulation(
     return system, simulation
 
 
-def create_sim_system(pdb, forcefield, temp=300, h_mass=1.5, base_force_group=1):
+def create_sim_system(cif, forcefield, temp=300, h_mass=1.5, base_force_group=1):
     # System Configuration
 
     nonbondedMethod = app.PME
@@ -362,8 +384,8 @@ def create_sim_system(pdb, forcefield, temp=300, h_mass=1.5, base_force_group=1)
 
     # Prepare the Simulation
 
-    topology = pdb.topology
-    positions = pdb.positions
+    topology = cif.topology
+    positions = cif.positions
 
     system = forcefield.createSystem(
         topology,
@@ -382,15 +404,15 @@ def create_sim_system(pdb, forcefield, temp=300, h_mass=1.5, base_force_group=1)
     return system
 
 
-def minimize(simulation, out_pdb, topology, maxIterations=10000, overwrite=False):
+def minimize(simulation, out_cif, topology, maxIterations=10000, overwrite=False):
     """Minimize the energy of a system
 
     Parameters
     ----------
     simulation : openmm.app.Simulation
         Simulation object
-    out_pdb : str
-        Path to the output pdb file
+    out_cif : str
+        Path to the output cif file
     topology : openmm.app.Topology
         Topology object
     maxIterations : int
@@ -399,9 +421,9 @@ def minimize(simulation, out_pdb, topology, maxIterations=10000, overwrite=False
         Overwrite the output file, default is False
     """
 
-    if not overwrite and os.path.isfile(out_pdb):
-        logger.info(f"File {out_pdb} exists already, skip minimize() step")
-        pdb = app.PDBFile(out_pdb)
+    if not overwrite and os.path.isfile(out_cif):
+        logger.info(f"File {out_cif} exists already, skip minimize() step")
+        cif = app.PDBxFile(out_cif)
 
         # In case virtual particle are present
         # It is necessary to keep their coordinates
@@ -413,7 +435,7 @@ def minimize(simulation, out_pdb, topology, maxIterations=10000, overwrite=False
             getParameters=False,
             groups=-1,
         ).getPositions()
-        positions[: topology.getNumAtoms()] = pdb.positions
+        positions[: topology.getNumAtoms()] = cif.positions
         simulation.context.setPositions(positions)
 
         return
@@ -430,8 +452,8 @@ def minimize(simulation, out_pdb, topology, maxIterations=10000, overwrite=False
         groups=-1,
     ).getPositions()
 
-    app.PDBFile.writeFile(
-        topology, positions[: topology.getNumAtoms()], open(out_pdb, "w")
+    app.PDBxFile.writeFile(
+        topology, positions[: topology.getNumAtoms()], open(out_cif, "w")
     )
 
 
@@ -526,7 +548,7 @@ def get_forces(system, simulation):
 
     return forces_dict
 
-def add_pos_restr(system, index_list, pdb_ref, k_rest, restr_force_group=None, constant_name="k"):
+def add_pos_restr(system, index_list, cif_ref, k_rest, restr_force_group=None, constant_name="k"):
     """Add position restraints to the system
 
     Parameters
@@ -535,8 +557,8 @@ def add_pos_restr(system, index_list, pdb_ref, k_rest, restr_force_group=None, c
         System object
     index_list : list
         List of indices to restrain
-    pdb_ref : openmm.app.PDBFile
-        Reference pdb file
+    cif_ref : openmm.app.PDBxFile
+        Reference cif file
     k_rest : float
         Force constant (KJ/mol/nm^2)
     restr_force_group : int
@@ -559,7 +581,7 @@ def add_pos_restr(system, index_list, pdb_ref, k_rest, restr_force_group=None, c
     restraint.addPerParticleParameter('z0')
 
     for index in index_list:
-        restraint.addParticle(index, pdb_ref.positions[index])
+        restraint.addParticle(index, cif_ref.positions[index])
     
     if restr_force_group is not None:
         restraint.setForceGroup(restr_force_group)
@@ -821,10 +843,12 @@ def simulate(
         groups=-1,
     ).getPositions()
 
+    app.PDBxFile.writeFile(
+        topology, positions[: topology.getNumAtoms()], open(f"{generic_name}.cif", "w")
+    )
     app.PDBFile.writeFile(
         topology, positions[: topology.getNumAtoms()], open(f"{generic_name}.pdb", "w")
     )
-
 
 def run_sim_check_time(
     simulation, nsteps, dt, save_checkpoint_steps=None, chekpoint_name=None

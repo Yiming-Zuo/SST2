@@ -6,7 +6,7 @@ import sys
 import logging
 import pandas as pd
 
-from openmm.app import PDBFile, ForceField, Simulation
+from openmm.app import PDBFile, PDBxFile, ForceField, Simulation
 from openmm import LangevinMiddleIntegrator, unit, Platform
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../src/')))
@@ -119,15 +119,15 @@ if __name__ == "__main__":
         os.makedirs(OUT_PATH)
 
     tools.prepare_pdb(args.pdb,
-                f"{OUT_PATH}/{name}_fixed.pdb",
+                f"{OUT_PATH}/{name}_fixed.cif",
                 pH=7.0,
                 overwrite=False)
 
     forcefield_files = ['amber14/protein.ff14SB.xml', 'amber14/tip3p.xml']
     forcefield = ForceField(*forcefield_files)
 
-    tools.create_water_box(f"{OUT_PATH}/{name}_fixed.pdb",
-                     f"{OUT_PATH}/{name}_water.pdb",
+    tools.create_water_box(f"{OUT_PATH}/{name}_fixed.cif",
+                     f"{OUT_PATH}/{name}_water.cif",
                      pad=args.pad,
                      forcefield=forcefield,
                      overwrite=False)
@@ -145,33 +145,38 @@ if __name__ == "__main__":
     ewaldErrorTolerance = 0.0005
     nsteps = int(np.ceil(args.eq_time_expl * unit.nanoseconds / dt))
 
-    pdb = PDBFile(f"{OUT_PATH}/{name}_water.pdb")
-
+    cif = PDBxFile(f"{OUT_PATH}/{name}_water.cif")
+    PDBFile.writeFile(
+        cif.topology,
+        cif.positions,
+        open(f"{OUT_PATH}/{name}_water.pdb", "w"),
+        True)
+    
     integrator = LangevinMiddleIntegrator(temperature, friction, dt)
 
 
-    system = tools.create_sim_system(pdb,
+    system = tools.create_sim_system(cif,
         forcefield=forcefield,
         temp=temperature,
         h_mass=args.hmr,
         base_force_group=1)
     
     # Add position restraints on Receptor CA atoms
-    pdb = PDBFile(f"{OUT_PATH}/{name}_water.pdb")
+    receptor_chains = ['A']
     CA_rec_indices = [
-        int(i.index) for i in pdb.topology.atoms() if (i.name in ['CA'] and i.residue.chain in ['A']) or (i.name in ['MN'])
+        int(i.index) for i in cif.topology.atoms() if (i.name in ['CA'] and i.residue.chain in receptor_chains) or (i.name in ['MN'])
     ]
 
     logger.info('- Add position restraints for receptor')
-    restraint = tools.add_pos_restr(system, CA_rec_indices, pdb, k_rest=1000, constant_name="k_rec")
+    restraint = tools.add_pos_restr(system, CA_rec_indices, cif, k_rest=1000, constant_name="k_rec")
 
     # Add position restraints on Ligand CA atoms
     CA_lig_indices = [
-        int(i.index) for i in pdb.topology.atoms() if (i.name in ['CA'] and i.residue.chain not in ['A'])
+        int(i.index) for i in cif.topology.atoms() if (i.name in ['CA'] and i.residue.chain not in receptor_chains)
     ]
 
     logger.info('- Add position restraints for ligand')
-    restraint_lig = tools.add_pos_restr(system, CA_lig_indices, pdb, k_rest=1000, constant_name="k_lig")
+    restraint_lig = tools.add_pos_restr(system, CA_lig_indices, cif, k_rest=1000, constant_name="k_lig")
 
 
 
@@ -181,18 +186,18 @@ if __name__ == "__main__":
     platformProperties = {'Precision': 'single'}
 
     simulation = Simulation(
-        pdb.topology, system, 
+        cif.topology, system, 
         integrator, 
         platform, 
         platformProperties)
-    simulation.context.setPositions(pdb.positions)
+    simulation.context.setPositions(cif.positions)
 
     logger.info(f"- Minimize system")
     
     tools.minimize(
         simulation,
-        f"{OUT_PATH}/{name}_em_water.pdb",
-        pdb.topology,
+        f"{OUT_PATH}/{name}_em_water.cif",
+        cif.topology,
         maxIterations=10000,
         overwrite=False)
     
@@ -207,14 +212,24 @@ if __name__ == "__main__":
     logger.info(f"- Launch equilibration")
     tools.simulate(
         simulation,
-        pdb.topology,
+        cif.topology,
+        tot_steps=10000,
+        dt=2 * unit.femtosecond,
+        generic_name=f"{OUT_PATH}/{name}_explicit_equi_short",
+        save_step_log = save_step_log,
+        save_step_dcd = save_step_dcd,
+        )
+    
+    tools.simulate(
+        simulation,
+        cif.topology,
         tot_steps=tot_steps,
         dt=dt,
         generic_name=f"{OUT_PATH}/{name}_explicit_equi",
         save_step_log = save_step_log,
         save_step_dcd = save_step_dcd,
         )
-    
+
     simulation.context.setParameter('k_lig', 100)
     simulation.context.setParameter('k_rec', 100)
     tot_steps = int(np.ceil(args.eq_time_expl_2 * unit.nanoseconds / dt))
@@ -222,7 +237,7 @@ if __name__ == "__main__":
     logger.info(f"- Launch 2nd equilibration")
     tools.simulate(
         simulation,
-        pdb.topology,
+        cif.topology,
         tot_steps=tot_steps,
         dt=dt,
         generic_name=f"{OUT_PATH}/{name}_explicit_equi_2",
@@ -270,7 +285,7 @@ if __name__ == "__main__":
 
     run_st(
         simulation,
-        pdb.topology,
+        cif.topology,
         f"{OUT_PATH}/{name}_ST",
         tot_steps,
         dt=dt,

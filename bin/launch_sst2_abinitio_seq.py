@@ -9,7 +9,7 @@ import pandas as pd
 from io import StringIO
 
 
-from openmm.app import PDBFile, ForceField
+from openmm.app import PDBFile, PDBxFile, ForceField
 from openmm import LangevinMiddleIntegrator, unit
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../src/')))
@@ -137,7 +137,7 @@ if __name__ == "__main__":
 
     tools.create_linear_peptide(args.seq, f"{OUT_PATH}/{name}_linear.pdb")
     tools.prepare_pdb(f"{OUT_PATH}/{name}_linear.pdb",
-                f"{OUT_PATH}/{name}_fixed.pdb",
+                f"{OUT_PATH}/{name}_fixed.cif",
                 pH=7.0,
                 overwrite=False)
 
@@ -148,7 +148,7 @@ if __name__ == "__main__":
 
     logger.info(f"- Run implicit simulation")
 
-    tools.implicit_sim(f"{OUT_PATH}/{name}_fixed.pdb",
+    tools.implicit_sim(f"{OUT_PATH}/{name}_fixed.cif",
                  impl_forcefield,
                  args.eq_time_impl,
                  f"{OUT_PATH}/{name}_implicit_equi",
@@ -158,8 +158,8 @@ if __name__ == "__main__":
     forcefield_files = ['amber14/protein.ff14SB.xml', 'amber14/tip3p.xml']
     forcefield = ForceField(*forcefield_files)
 
-    tools.create_water_box(f"{OUT_PATH}/{name}_implicit_equi.pdb",
-                     f"{OUT_PATH}/{name}_water.pdb",
+    tools.create_water_box(f"{OUT_PATH}/{name}_implicit_equi.cif",
+                     f"{OUT_PATH}/{name}_water.cif",
                      pad=args.pad,
                      forcefield=forcefield,
                      overwrite=False)
@@ -176,15 +176,20 @@ if __name__ == "__main__":
     ewaldErrorTolerance = 0.0005
     nsteps = args.eq_time_expl * unit.nanoseconds / dt
 
-    pdb = PDBFile(f"{OUT_PATH}/{name}_water.pdb")
-
+    cif = PDBxFile(f"{OUT_PATH}/{name}_water.cif")
+    PDBFile.writeFile(
+        cif.topology,
+        cif.positions,
+        open(f"{OUT_PATH}/{name}_water.pdb", "w"),
+        True)
+    
     # Get indices of the three sets of atoms.
-    all_indices = [int(i.index) for i in pdb.topology.atoms()]
-    solute_indices = [int(i.index) for i in pdb.topology.atoms() if i.residue.chain.id in ['A']]
+    all_indices = [int(i.index) for i in cif.topology.atoms()]
+    solute_indices = [int(i.index) for i in cif.topology.atoms() if i.residue.chain.id in ['A']]
 
     integrator = LangevinMiddleIntegrator(temperature, friction, dt)
 
-    system = tools.create_sim_system(pdb,
+    system = tools.create_sim_system(cif,
         forcefield=forcefield,
         temp=temperature,
         h_mass=args.hmr,
@@ -192,7 +197,7 @@ if __name__ == "__main__":
 
     sys_rest2 = REST2(
         system=system,
-        pdb=pdb,
+        pdb=cif,
         forcefield=forcefield,
         solute_index=solute_indices,
         integrator=integrator,
@@ -202,8 +207,8 @@ if __name__ == "__main__":
     logger.info(f"- Minimize system")
     tools.minimize(
         sys_rest2.simulation,
-        f"{OUT_PATH}/{name}_em_water.pdb",
-        pdb.topology,
+        f"{OUT_PATH}/{name}_em_water.cif",
+        cif.topology,
         maxIterations=10000,
         overwrite=False)
 

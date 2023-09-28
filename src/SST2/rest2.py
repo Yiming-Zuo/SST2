@@ -524,6 +524,7 @@ class REST2:
         # Create system and simulations:
         self.system_solute, self.simulation_solute = create_system_simulation(
             solute_out_pdb,
+            cif_format=False,
             forcefield=forcefield,
             nonbondedMethod=nonbondedMethod,
             nonbondedCutoff=nonbondedCutoff,
@@ -541,6 +542,7 @@ class REST2:
 
         self.system_solvent, self.simulation_solvent = create_system_simulation(
             solvent_out_pdb,
+            cif_format=False,
             forcefield=forcefield,
             nonbondedMethod=nonbondedMethod,
             nonbondedCutoff=nonbondedCutoff,

@@ -181,7 +181,7 @@ if __name__ == "__main__":
                 expected_days = expected_time
                 expected_hours = (expected_days % 1) * 24
                 expected_minutes = (expected_hours % 1) * 60
-                print(f"{f:{max_str_size}} {sim_time:6.2f} us  {run_perc:4.1f}% Complete in {int(expected_days):2d}:{int(expected_hours):02d}:{int(expected_minutes):02d} d:h:min ({ns_a_day:7.1f} ns/day)")
+                print(f"{f:{max_str_size}} {sim_time:7.3f} us {run_perc:5.1f}% Complete in {int(expected_days):2d}:{int(expected_hours):02d}:{int(expected_minutes):02d} d:h:min ({ns_a_day:6.1f} ns/day)")
         
             else:
-                print(f"{f:{max_str_size}} {sim_time:6.2f} us  {run_perc:4.1f}%")
+                print(f"{f:{max_str_size}} {sim_time:7.3f} us {run_perc:5.1f}%")
