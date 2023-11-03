@@ -516,6 +516,30 @@ def print_forces(system, simulation):
     for group, force in forces_dict.items():
         print(f"{group:<3} {force['name']:<25} {force['energy']}")
 
+def get_specific_forces(system, simulation, force_name):
+    """Prints the forces of the system
+
+    Parameters
+    ----------
+    system : openmm.System
+        System object
+    simulation : openmm.app.Simulation
+        Simulation object
+
+    Returns
+    -------
+    None
+    """
+
+    forces_dict = get_forces(system, simulation)
+
+    force_tot = 0 * unit.kilojoules_per_mole
+
+    for group, force in forces_dict.items():
+        if force['name'] == force_name:
+            force_tot += force['energy']
+    return force_tot
+
 
 def get_forces(system, simulation):
     """Returns the forces of the system
