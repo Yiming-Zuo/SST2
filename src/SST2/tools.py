@@ -533,11 +533,11 @@ def get_specific_forces(system, simulation, force_name):
 
     forces_dict = get_forces(system, simulation)
 
-    force_tot = 0 * unit.kilojoules_per_mole
+    force_tot = []
 
     for group, force in forces_dict.items():
         if force['name'] == force_name:
-            force_tot += force['energy']
+            force_tot.append(force['energy'])
     return force_tot
 
 
