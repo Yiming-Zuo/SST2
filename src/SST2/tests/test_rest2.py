@@ -419,7 +419,7 @@ def test_peptide_protein_complex(tmp_path):
             print(
                 f"{i}   {force['name']:25} {force['energy'].value_in_unit(unit.kilojoule_per_mole):.2f} KJ/mol {forces_solute[i]['energy']}"
             )
-            if force['name'] in ['HarmonicBondForce', 'HarmonicAngleForce'] or i ==4:  # HarmonicBondForce, HarmonicAngleForce, CustomTorsionForces not scaled
+            if force['name'] in ['HarmonicBondForce', 'HarmonicAngleForce', 'PeriodicTorsionForce']:  # HarmonicBondForce, HarmonicAngleForce, CustomTorsionForces not scaled
                 assert (
                     pytest.approx(
                         force["energy"] / forces_solute[i]["energy"], tolerance
