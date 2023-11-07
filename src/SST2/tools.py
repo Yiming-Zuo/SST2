@@ -19,7 +19,8 @@ logger = logging.getLogger(__name__)
 
 
 def create_linear_peptide(seq, out_pdb):
-    """Creates a linear peptide
+    """Creates a linear peptide and save it in
+    `out_pdb` file.
 
     Parameters
     ----------
@@ -32,17 +33,12 @@ def create_linear_peptide(seq, out_pdb):
     -------
     None
 
-    Warnings
-    --------
-    This function is using pdb_manip_py, this should be replaced by
-    pdb_numpy in the future.
     """
-    from pdb_manip_py import pdb_manip
+    from pdb_numpy import abinitio
 
     # Create linear peptide:
-    pep_coor = pdb_manip.Coor()
-
-    pep_coor.make_peptide(seq, out_pdb)
+    pep_coor = abinitio.make_peptide(seq)
+    pep_coor.write(out_pdb)
 
 
 def prepare_pdb(in_pdb, out_cif, pH=7.0, overwrite=False):
