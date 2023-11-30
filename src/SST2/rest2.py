@@ -683,6 +683,12 @@ class REST2:
         for i in range(len(self.init_nb_exept_index)):
             index = self.init_nb_exept_index[i]
             p1, p2, q, sigma, eps = self.init_nb_exept_value[i]
+            # In ExceptionParameters, q is the charge product.
+            # To scale particle charges by `np.sqrt(scale)`
+            # is equivalent to scale the product by `scale`
+            # As for eps, eps(i,j) = sqrt(eps(i)*eps(j))
+            # if we scale eps(i) and eps(j) by `scale`
+            # we aslo scale eps(i,j) by `scale`.
             nonbonded_force.setExceptionParameters(
                 index, p1, p2, q * scale, sigma, eps * scale
             )
@@ -722,6 +728,12 @@ class REST2:
             p1, p2, q, sigma, eps = self.init_nb_exept_solute_value[i]
             # if i in [11, 12, 13, 14, 15, 16]:
             #    print(i, p1, p2, q, sigma, eps)
+            # In ExceptionParameters, q is the charge product.
+            # To scale particle charges by `np.sqrt(scale)`
+            # is equivalent to scale the product by `scale`
+            # As for eps, eps(i,j) = sqrt(eps(i)*eps(j))
+            # if we scale eps(i) and eps(j) by `scale`
+            # we aslo scale eps(i,j) by `scale`.
             nonbonded_force.setExceptionParameters(
                 i, p1, p2, q * scale, sigma, eps * scale
             )
