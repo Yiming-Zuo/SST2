@@ -113,6 +113,11 @@ def parser_input():
                         action="store_true",
                         dest="exclude_Pro_omega",
                         help='Exclude Proline omega dihedral scale angles')
+    parser.add_argument('-chain',
+                        action="store",
+                        dest="solute_chain",
+                        help='Solute chain ID, default=A',
+                        default='A')
     return parser
 
 if __name__ == "__main__":
@@ -166,7 +171,7 @@ if __name__ == "__main__":
 
     # Get indices of the three sets of atoms.
     all_indices = [int(i.index) for i in cif.topology.atoms()]
-    solute_indices = [int(i.index) for i in cif.topology.atoms() if i.residue.chain.id in ['A']]
+    solute_indices = [int(i.index) for i in cif.topology.atoms() if i.residue.chain.id in [args.solute_chain]]
 
     integrator = LangevinMiddleIntegrator(temperature, friction, dt)
 
