@@ -487,7 +487,7 @@ def setup_simulation(system, position, topology, integrator, platform_name="CUDA
     simulation.context.setPositions(position)
 
     simulation.context.setVelocitiesToTemperature(300 * unit.kelvin)
-    print("Created simulation")
+    logger.info("Created simulation")
 
     return simulation
 
@@ -890,13 +890,13 @@ def run_sim_check_time(
 
     """
 
-    print("Timing %d steps of integration..." % nsteps)
+    logger.info(f"Timing {nsteps} steps of integration...")
     initial_time = time.time()
     tot_steps = nsteps
 
     if save_checkpoint_steps is not None:
         iter_num = int(np.ceil(nsteps / save_checkpoint_steps))
-        print(nsteps, save_checkpoint_steps, iter_num)
+        logger.info(f"{nsteps}, {save_checkpoint_steps}, {iter_num}")
     else:
         iter_num = 1
         save_checkpoint_steps = nsteps
@@ -922,7 +922,7 @@ def run_sim_check_time(
         (tot_steps * dt).value_in_unit(unit.nanoseconds)
     ) / elapsed_time.value_in_unit(unit.day)
 
-    print(
+    logger.info(
         f"{int(tot_steps):d} steps of {dt_val:.1f} fs timestep"
         + f" ({tot_time_val:.1f} ns) took {elapsed_time_val:.1f}"
         + f" s : {perfomance:.1f} ns/day"

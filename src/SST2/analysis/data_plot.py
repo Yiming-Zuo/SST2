@@ -3,6 +3,8 @@
 
 import os
 import math
+import logging
+import copy
 
 import pandas as pd
 import numpy as np
@@ -13,6 +15,54 @@ import matplotlib.pyplot as plt
 import openmm.unit as unit
 from scipy.ndimage import gaussian_filter1d
 
+# Logging
+logger = logging.getLogger(__name__)
+
+def read_SST2_data(
+    generic_name,
+    dt=0.004,
+    full_sep=",",
+    save_step_dcd=100000,
+    lambda_T_ref = 300.0
+):
+    """
+    Read the sst2 data from the csv files.
+    The data may be splited in several files if simulation
+    had to restart. The function merge all the files
+    in one dataframe.
+
+    Parameters
+    ----------
+    generic_name : str
+        Generic name of the csv files (without the `.csv` extension).
+    dt : float, optional
+        Time step in ps of the simulation. The default is 0.004 ps.
+    full_sep : str, optional
+        Separator used in the full csv file. The default is ",".
+    save_step_dcd : int, optional
+        Step number used in the dcd file. The default is 100000.
+    lambda_T_ref : float, optional
+        Reference temperature for the lambda. The default is None.
+    
+    Returns
+    -------
+    df_all : pandas.DataFrame
+        Dataframe with all the data.
+
+    """
+
+    fields=["Step", "Aim Temp (K)", "E solute scaled (kJ/mole)",
+        "E solute not scaled (kJ/mole)",
+        "E solvent (kJ/mole)", "E solvent-solute (kJ/mole)"]
+    
+    return read_ST_data(
+        generic_name=generic_name,
+        dt=dt,
+        fields=fields,
+        full_sep=full_sep,
+        save_step_dcd=save_step_dcd,
+        lambda_T_ref=lambda_T_ref
+    )
 
 def read_ST_data(
     generic_name,
@@ -63,28 +113,29 @@ def read_ST_data(
     part = 1
     while os.path.isfile(f"{generic_name}_part_{part + 1}.csv"):
         part += 1
-    print(f" part number = {part}")
+    logger.info(f"There is {part} .csv parts to read.")
 
+    logger.info(f"Reading part 1")
     df_temp = pd.read_csv(f"{generic_name}_full.csv", usecols=fields, sep=full_sep)
     df_sim = pd.read_csv(f"{generic_name}.csv")
 
+    df_temp_list = [df_temp]
+    df_sim_list = [df_sim]
 
     for i in range(2, part + 1):
 
-        last_old_step = df_temp.iloc[df_temp.index[-1], 0]
+        last_old_step = df_temp_list[-1].iloc[df_temp_list[-1].index[-1], 0]
 
-        print(f"Reading part {i}")
+        logger.info(f"Reading part {i}")
         df_sim_part = pd.read_csv(f"{generic_name}_part_{i}.csv")
         df_temp_part = pd.read_csv(
             f"{generic_name}_full_part_{i}.csv", usecols=fields, sep=full_sep
         )
 
-        # print(df_temp_part.head(1))
-
         # Read step
         first_new_step = df_temp_part.iloc[0, 0]
 
-        print(first_new_step)
+        logger.info(f"First step is {first_new_step}")
 
         # The dcd format has some limitation in the number of step
         # In some case a simulation restart has to define step number at 0
@@ -92,50 +143,64 @@ def read_ST_data(
         # as function of the last simulation.
         if first_new_step < last_old_step - save_step_dcd:
             chk_step = (
-                df_sim['#"Step"'][df_sim['#"Step"'] % save_step_dcd == 0].iloc[-1]
+                df_sim_list[-1]['#"Step"'][df_sim_list[-1]['#"Step"'] % save_step_dcd == 0].iloc[-1]
                 - first_new_step
             )
             df_temp_part[fields[0]] += chk_step
             df_sim_part['#"Step"'] += chk_step
-            print(f"add {chk_step} to {generic_name}_full_part_{i}.csv")
+            logger.info(f"add {chk_step} to {generic_name}_full_part_{i}.csv")
 
-        df_sim = (
-            pd.concat([df_sim, df_sim_part], axis=0, join="outer")
-            .reset_index()
-            .drop(["index"], axis=1)
-        )
-        df_temp = (
-            pd.concat([df_temp, df_temp_part], axis=0, join="outer")
-            .reset_index()
-            .drop(["index"], axis=1)
-        )
-        del df_sim_part, df_temp_part
+        df_sim_list.append(df_sim_part)
+        df_temp_list.append(df_temp_part)
 
-    print(f"sim csv  : {len(df_sim)}")
-    print(f"temp csv : {len(df_temp)}")
+    df_sim = pd.concat(df_sim_list, axis=0, join="outer", ignore_index=True)
+    df_temp = pd.concat(df_temp_list, axis=0, join="outer", ignore_index=True)
+
+    logger.info("Delete DataFrame part from memory")
+    for df_sim_part in df_sim_list:
+        del df_sim_part
+    
+    for df_temp_part in df_temp_list:
+        del df_temp_part
+
+    logger.info(f"sim.csv  length : {len(df_sim)}")
+    logger.info(f"temp.csv length : {len(df_temp)}")
 
     if '#"Steps"' in df_temp.columns:
+        logger.info("Rename columns df_temp")
         df_temp = df_temp.rename(
             columns={'#"Steps"': "Step", "Temperature (K)": "Aim Temp (K)"}
         )
 
+    if '#"Step"' in df_sim.columns:
+        logger.info("Rename columns df_sim")
+        df_sim = df_sim.rename(columns={'#"Step"': "Step"})
+
     max_step = min([len(df_sim), len(df_temp)])
-    print(max_step)
+    logger.info(f"Using a length of : {max_step}")
 
     df_sim = df_sim.iloc[:max_step]
     df_temp = df_temp.iloc[:max_step]
-    # Add time column
-    df_temp[r"$Time\;(\mu s)$"] = df_temp["Step"] * dt / 1e6
-    df_sim = df_sim.drop(['#"Step"'], axis=1)
+
+    if "Step" in df_temp.columns:
+        df_temp = df_temp.drop(["Step"], axis=1)
 
     # Concat both dataframe
+    logger.info(f"Concat both dataframe")
     df_all = pd.concat([df_temp, df_sim], axis=1)
+    #df_all = pd.merge(df_temp, df_sim, on="Step", how="outer")
     del df_temp, df_sim
 
+    # Add time column
+    logger.info(f"Add time column")
+    df_all[r"$Time\;(\mu s)$"] = df_all["Step"] * dt / 1e6
+
     # Add a categorical column for temp
+    logger.info(f"Set Temp column to a categorical one")
     df_all["Temp (K)"] = pd.Categorical(df_all["Aim Temp (K)"])
 
     # Add lambda column:
+    logger.info(f"Add lambda column")
     if lambda_T_ref is not None:
         df_all["lambda"] = lambda_T_ref / df_all["Aim Temp (K)"]
 
@@ -145,7 +210,10 @@ def read_ST_data(
             df_all[r"$\lambda$"].cat.categories[::-1]
         )
     # Remove Nan rows (rare cases of crashes)
-    df_all = df_all[df_all["Step"].notna()]
+    if df_all["Step"].isna().any():
+        logger.info(f"Remove Nan rows")
+        df_all = df_all.dropna()
+    #df_all = df_all[df_all["Step"].notna()]
 
     return df_all
 
@@ -184,7 +252,7 @@ def compute_exchange_prob(
     temp_list = df[temp_col].unique()
     min_temp = temp_list[0]
     max_temp = temp_list[-1]
-    print(f"Min_temp = {min_temp:.2f}, Max temp. = {max_temp:.2f}, #Rungs = {len(temp_list)}")
+    logger.info(f"Min_temp = {min_temp:.2f}, Max temp. = {max_temp:.2f}, #Rungs = {len(temp_list)}")
 
     # Compute exchange probability:
     last_temp = min_temp
@@ -200,7 +268,7 @@ def compute_exchange_prob(
 
     step_time = df.loc[1, time_ax_name] - df.loc[0, time_ax_name]
     step_time *= 1e6 # ps
-    print(f"Step time = {step_time:.2f} ps")
+    logger.info(f"Step time = {step_time:.2f} ps")
 
     trip_flag = False
 
@@ -251,11 +319,11 @@ def compute_exchange_prob(
         hue=temp_list)
     plt.xlabel(temp_col)
     plt.ylabel(r"$p()$")
-    plt.title(r"Transition probability at each rung")
+    #plt.title(r"Transition probability at each rung")
     ax.get_legend().remove()
 
     # print(all_temp_change_num)
-    print(exchange_time / step_time)
+    logger.info(exchange_time / step_time)
 
     ex_prob = temp_change_num / len(df) * exchange_time / step_time
 
@@ -713,7 +781,7 @@ def plot_free_energy(
     if levels is None and level_gap is not None:
         max_free = np.max(free_energy[nonzero])
         levels = int(max_free // level_gap)
-        print(levels)
+        logger.info(levels)
 
     mappable = ax.contourf(
         x, y, free_energy, ncontours, norm=norm,
@@ -722,14 +790,17 @@ def plot_free_energy(
     
     misc = dict(mappable=mappable)
     if cbar:
-        cbar = fig.colorbar(mappable, ax=ax, orientation=cbar_orientation)
+        cbar = fig.colorbar(
+            mappable,
+            ax=ax,
+            orientation=cbar_orientation)
         cbar.set_label(cbar_label)
         misc.update(cbar=cbar)
-
+        
     return fig, ax, misc
 
 
-def compute_hdbscan_cluster(pca_df, min_cluster_size=50, min_samples=50):
+def compute_cluster_hdbscan(pca_df, min_cluster_size=50, min_samples=50):
 
     import hdbscan
 
@@ -742,7 +813,7 @@ def compute_hdbscan_cluster(pca_df, min_cluster_size=50, min_samples=50):
     n_clusters_ = len(set(labels)) - (1 if -1 in labels else 0)
     n_noise_ = list(labels).count(-1)
 
-    print('Number of cluster : {}, perc of non clustered points : {:.1f}%'.format(n_clusters_, 100*n_noise_/len(pca_df)))
+    logger.info('Number of cluster : {}, perc of non clustered points : {:.1f}%'.format(n_clusters_, 100*n_noise_/len(pca_df)))
 
     # count each cluster
     clust_dict = {}
@@ -766,11 +837,11 @@ def compute_hdbscan_cluster(pca_df, min_cluster_size=50, min_samples=50):
     for i, clust in enumerate(sorted_dict):
 
         if clust != -1:
-            print(f'Cluster:{clust_new:3}   {sum(new_label == clust):5} | {sum(new_label == clust)/len(labels):.3f}')
+            logger.info(f'Cluster:{clust_new:3}   {sum(new_label == clust):5} | {sum(new_label == clust)/len(labels):.3f}')
             new_value_list.append(clust_new)
             clust_new += 1
         else:
-            print(f'Not Clustered {sum(new_label == clust):5} | {sum(new_label == clust)/len(labels):.3f}')
+            logger.info(f'Not Clustered {sum(new_label == clust):5} | {sum(new_label == clust)/len(labels):.3f}')
             new_value_list.append(0)
             cat_to_remove = [0]
         select_list.append(new_label == clust)
@@ -798,7 +869,7 @@ def compute_cluster_kmean(pca_df, max_cluster=20, random_state=0):
     kmeans_list = []
 
     for k in range(2, max_cluster + 1):
-        print(f"{k}/{max_cluster}")
+        logger.info(f"{k}/{max_cluster}")
         kmeans = KMeans(n_clusters=k, **kmeans_kwargs)
         kmeans.fit(pca_df)
         kmeans_list.append(kmeans)     
@@ -811,7 +882,7 @@ def compute_cluster_kmean(pca_df, max_cluster=20, random_state=0):
     plt.show()
 
     index_min = np.argmin(silhouette_coefficients)
-    print(f"{index_min+2} clusters optimal")
+    logger.info(f"{index_min+2} clusters optimal")
 
     clust_serie = pd.Categorical(
         pd.Series(
@@ -819,6 +890,24 @@ def compute_cluster_kmean(pca_df, max_cluster=20, random_state=0):
         ).remove_categories([])
 
     return clust_serie, kmeans_list[index_min].cluster_centers_
+
+
+def compute_Tm(temperatures, folding_fraction):
+
+    from scipy.optimize import curve_fit
+
+    # Define the Four Parameter Logistic Regression (4PL)
+    def sigmoidal_curve(x, A, B, C, D):
+        return D + ((A-D)/(1.0+((x/C)**B)))
+
+    p0 = [1.0, 0.0, 340, 0.05]
+    try:
+        popt, pcov = curve_fit(sigmoidal_curve, temperatures, folding_fraction, p0=p0)
+        logger.info(f'Melting Temperature (Tm): {popt[2]:.2f} K')
+        return(popt[2])
+    except RuntimeError:
+        logger.error("Error - curve_fit failed")
+        return(None)
 
 
 def plot_folding_fraction(df, col="RMSD (nm)", cutoff=0.18, label=None,
@@ -843,6 +932,8 @@ def plot_folding_fraction(df, col="RMSD (nm)", cutoff=0.18, label=None,
     plt.xlabel('Temperature (K)')
     plt.ylabel('fraction folded')
     plt.ylim((0,1.0))
+
+    return compute_Tm(temp_list, fold_frac)
 
 
 def compute_folding_fraction(df, col="RMSD (nm)", cutoff=0.18):
@@ -972,7 +1063,7 @@ def plot_folding_fraction_convergence(df, col="RMSD (nm)", cutoff=0.18, label=No
         temp_list_plot = temp_list
     
     max_time = df[time_ax_name].max()
-    print(max_time)
+    logger.info(max_time)
     
     for i in range( int((max_time-start_time)/time_interval) + 1):
         #print(f"{i}  {start_time:.1f}  {start_time + (i + 1) * time_interval:.1f}")
@@ -991,3 +1082,175 @@ def plot_folding_fraction_convergence(df, col="RMSD (nm)", cutoff=0.18, label=No
     plt.ylabel('fraction folded')
     plt.ylim((0,1.0))
     plt.legend()
+
+
+def plot_rung_occupancy(df, hue='group'):
+
+    hue_list = df[hue].unique()
+
+    for hue_val in hue_list:
+
+        sim_df = df[df[hue] == hue_val]
+
+        #for temp in enumerate(temp_list):
+        temp_count = sim_df['Aim Temp (K)'].value_counts(normalize=True)
+        temp_count = temp_count.sort_index()
+        #print(len(temp_count))
+        #print(temp_count)
+        temp_count = temp_count / (1/len(temp_count)) -1
+        #print(temp_count_rel)
+        
+        plt.plot(temp_count.index, temp_count.values, label=hue_val)
+        plt.scatter(temp_count.index, temp_count.values)
+    
+    plt.xlabel('Temperature (K)')
+    plt.ylabel(r'$\Delta$ Rung Occupancy')
+    plt.legend(bbox_to_anchor=(1.01, 1.0))
+
+
+def count_rmsd_transition(df,
+    rmsd_fold=0.2, rmsd_unfold=0.4, dt=0.002,
+    rmsd_col='RMSD (nm)', time_ax_name=r"$Time\;(\mu s)$"):
+
+    sim_list = df.sim.unique()
+    trans_list = []
+
+    for sim in sim_list:
+
+        sim_df = df[df.sim == sim]
+
+        trans_num = 0
+        fold_state = True if sim_df[rmsd_col].iloc[0] < rmsd_fold else False
+
+        for rmsd in sim_df[rmsd_col]:
+            if (rmsd < rmsd_fold) and not fold_state:
+                trans_num += 1
+                fold_state = True
+            if (rmsd > rmsd_unfold) and fold_state:
+                trans_num += 1
+                fold_state = False
+
+        #dt = min(sim_df[time_ax_name].iloc[1:].values - sim_df[time_ax_name].iloc[:-1].values)
+        step_gap = sim_df["Step"].iloc[1] - sim_df["Step"].iloc[0]
+        dt_steps = step_gap * dt
+        max_time = len(sim_df) * dt_steps / 1e6
+        old_max_time = sim_df[time_ax_name].iloc[-1]
+        logger.info(max_time, sim_df[time_ax_name].iloc[-1])
+
+        #max_time = sim_df[time_ax_name].iloc[-1]
+
+        trans_freq = trans_num / max_time
+        trans_list.append(trans_freq)
+
+        logger.info(f'sim: {sim:20}  trans num={trans_num:6}  clust_freq = {trans_freq:.2f}/us, {max_time:.2f} {step_gap:.2f} {len(sim_df):.2f} ')
+
+    df_trans = pd.DataFrame({'sim': sim_list, 'trans': trans_list})
+    return df_trans
+
+
+def count_clust_transition(df, clust_col='clust', time_ax_name=r"$Time\;(\mu s)$"):
+
+    sim_list = df.sim.unique()
+    trans_list = []
+    
+    for sim in sim_list:
+
+        sim_df = df[df.sim == sim]
+
+        last_clust = sim_df[clust_col].iloc[0]
+        clust_num = 0
+
+        for clust in sim_df[clust_col]:
+            if (not np.isnan(clust)) and (clust != last_clust):
+                clust_num += 1
+                last_clust = clust
+
+        trans_freq = clust_num / sim_df[time_ax_name].iloc[-1]
+
+        logger.info(f'sim: {sim:20}  clust num={clust_num:6}  clust_freq = {trans_freq:.2f}/us')
+        trans_list.append(trans_freq)
+
+
+    df_trans = pd.DataFrame({'sim': sim_list, 'trans': trans_list})
+    return df_trans
+
+
+def compare_weight_RMSD(df,
+        x=r"$Time\;(\mu s)$",
+        hue='sim',
+        ener='new_pot',
+        time_ax_name=r"$Time\;(\mu s)$",
+        max_data=50000):
+
+    local_df = filter_df(df, max_data)
+    temp_list = local_df['Aim Temp (K)'].unique()
+    temp_list.sort()
+
+    # Compute overall avg
+    temp_avg_dict = {}
+    for temp in temp_list:
+        temp_avg_dict[temp] = local_df[local_df['Aim Temp (K)'] == temp][ener].mean()
+    logger.info(temp_avg_dict)
+
+    group_list = local_df["group"].unique()
+
+    rmsd_df = pd.DataFrame()
+
+    for group in group_list:
+        group_df = local_df[local_df["group"] == group]
+        sim_list = group_df[hue].unique()
+
+        logger.info(group, sim_list)
+
+        for sim in sim_list:
+            logger.info("    ", sim, group)
+            sim_df = group_df[group_df[hue] == sim]
+            sim_df = compute_moving_average(sim_df, ener=ener)
+
+            compute_weight_RMSD(
+                sim_df, final_weight_dict=temp_avg_dict, ener=ener)
+
+            #sns.lineplot(
+            #    data=sim_df,
+            #    x=time_ax_name,
+            #    y='Weight RMSD',
+            #    label=sim,
+            #    lw=2)
+
+            local_weight_df = pd.DataFrame(
+                {'Weight RMSD': sim_df[sim_df['Weight RMSD'].notna()]['Weight RMSD'],
+                 time_ax_name: sim_df[sim_df['Weight RMSD'].notna()][time_ax_name],
+                 'group': group,
+                 'sim': sim,
+                })
+
+
+            local_weight_df[time_ax_name] = local_weight_df[time_ax_name].round(2)
+            local_weight_df = local_weight_df.drop_duplicates(subset=[time_ax_name])
+
+            sns.lineplot(
+                data=local_weight_df,
+                x=time_ax_name,
+                y='Weight RMSD',
+                label=sim,
+                lw=0.5)
+
+
+            rmsd_df = pd.concat([rmsd_df, local_weight_df])
+
+            #print(sim_df[sim_df['Weight RMSD'].notna()])
+
+    # Need to round time column, for a better averaging
+    #rmsd_df[time_ax_name] = rmsd_df[time_ax_name].round(2)
+    sns.lineplot(
+                data=rmsd_df,
+                x=time_ax_name,
+                y='Weight RMSD',
+                hue='group',
+                #label=sim,
+                lw=2)
+
+    plt.ylabel(r"RMSD $(KJ.mol^{-1})$")
+    plt.title(r"Weights $f_i$ RMSD")
+
+    return rmsd_df

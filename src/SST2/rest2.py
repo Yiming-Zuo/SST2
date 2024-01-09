@@ -374,7 +374,7 @@ class REST2:
                 elif j.residue.name == "PRO" and j.name == "N" and i.name == "C":
                     bond_idxs_pro.append(sorted([i.index, j.index]))
 
-            print("bond_idxs_pro", bond_idxs_pro)
+            logger.info(f"bond_idxs_pro {bond_idxs_pro}")
 
         # Store the original torsion parameters
         torsion_index = 0
@@ -416,7 +416,7 @@ class REST2:
             not_pro_omega = True
             if solute_in and not_improper and exclude_Pro_omegas:
                 if sorted([p2, p3]) in bond_idxs_pro:
-                    print("Proline omega torsion detected",p1, p2, p3, p4)
+                    logger.info(f"Proline omega torsion detected {p1}-{p2}-{p3}-{p4}")
                     not_pro_omega = False
 
             if solute_in and not_improper and not_pro_omega:
