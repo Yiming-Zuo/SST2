@@ -8,7 +8,6 @@ import math
 import logging
 import pandas as pd
 from io import StringIO
-from pdb_manip_py import pdb_manip
 import pdbfixer
 
 from openmm.app import PDBFile, PDBxFile, ForceField
@@ -188,6 +187,7 @@ if __name__ == "__main__":
         solute_index=solute_indices,
         integrator=integrator,
         dt=dt,
+        temperature=temperature,
         exclude_Pro_omegas=args.exclude_Pro_omega)
 
     logger.info(f"- Minimize system")

@@ -354,7 +354,7 @@ def create_system_simulation(
     return system, simulation
 
 
-def create_sim_system(cif, forcefield, temp=300, h_mass=1.5, base_force_group=1):
+def create_sim_system(cif, forcefield, temp=300.0, h_mass=1.5, base_force_group=1):
     # System Configuration
 
     nonbondedMethod = app.PME

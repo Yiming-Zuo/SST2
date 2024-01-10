@@ -20,7 +20,73 @@ import SST2.tools as tools
 import SST2.rest2 as rest2
 
 
-from .datafiles import PDB_PROT_PEP_SOL, PDB_5AWL
+from .datafiles import PDB_PROT_PEP_SOL, PDB_5AWL, PDB_2HPL
+
+
+def test_peptide_protein_complex_scratch(tmp_path):
+
+    OUT_PATH = tmp_path
+    name = 'tmp'
+
+    tools.prepare_pdb(
+        PDB_2HPL,
+        f"{OUT_PATH}/{name}_fixed.cif",
+        pH=7.0,
+        overwrite=False)
+
+    forcefield_files = ['amber14/protein.ff14SB.xml', 'amber14/tip3p.xml']
+    forcefield = app.ForceField(*forcefield_files)
+
+    tools.create_water_box(
+        f"{OUT_PATH}/{name}_fixed.cif",
+        f"{OUT_PATH}/{name}_water.cif",
+        pad=1.5,
+        forcefield=forcefield,
+        overwrite=False)
+
+    cif = app.PDBxFile(f"{OUT_PATH}/{name}_water.cif")
+
+    dt = 4 * unit.femtosecond
+    temperature = 310.0 * unit.kelvin
+    hydrogenMass = 1.5 * unit.amu
+    friction = 1.0 / unit.picoseconds
+
+    integrator = openmm.LangevinMiddleIntegrator(temperature, friction, dt)
+
+    # Get indices of the three sets of atoms.
+    all_indices = [int(i.index) for i in cif.topology.atoms()]
+    solute_indices = [int(i.index) for i in cif.topology.atoms() if i.residue.chain.id in ["B"]]
+
+    system = tools.create_sim_system(cif,
+        temp=temperature,
+        forcefield=forcefield,
+        h_mass=hydrogenMass,
+        base_force_group=1)
+
+    sys_rest2 = rest2.REST2(
+        system=system,
+        pdb=cif,
+        forcefield=forcefield,
+        solute_index=solute_indices,
+        integrator=integrator,
+        temperature=temperature,
+        dt=dt)
+
+
+    assert sys_rest2.system.getNumForces() == 9
+    assert sys_rest2.solute_index == solute_indices
+    assert len(sys_rest2.solute_index) == 74
+    assert len(sys_rest2.solvent_index) == pytest.approx(
+        14305, 0.1
+    )
+    assert sys_rest2.scale == 1.0
+    assert len(sys_rest2.init_nb_param) == len(sys_rest2.solute_index) + len(sys_rest2.solvent_index)
+    assert len(sys_rest2.init_nb_exept_index) == 387
+    assert len(sys_rest2.init_nb_exept_value) == 387
+    assert len(sys_rest2.init_nb_exept_solute_value) == 387
+    assert len(sys_rest2.init_torsions_index) == 206
+    assert len(sys_rest2.init_torsions_value) == 206
+    assert sys_rest2.solute_torsion_force.getNumTorsions() == 206
 
 
 def test_peptide_protein_complex(tmp_path):
@@ -657,3 +723,4 @@ def test_5awl_omega_PRO(tmp_path):
         if isinstance(force, openmm.CustomTorsionForce):
             assert force.getNumTorsions() == torsion_len[force_i]
             force_i += 1
+
