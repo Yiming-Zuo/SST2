@@ -1364,3 +1364,293 @@ def compare_weight_RMSD(df,
     plt.title(r"Weights $f_i$ RMSD")
 
     return rmsd_df
+
+
+
+def plot_energie_swap_convergence(df, ener_name="new_pot", lag_num = 4,
+    time_ax_name=r"$Time\;(\mu s)$", ylabel=r'$E_{p}$',
+    split_graph=False, ci=95, avg_start=None):
+
+
+    time_step = df.loc[1, time_ax_name] - df.loc[0, time_ax_name]
+    temp_list = df['Aim Temp (K)'].unique()
+    temp_list.sort()
+
+    for temp_index in range(len(temp_list)):
+
+        if avg_start is None:
+            avg_ener = df[
+                df["Aim Temp (K)"] == temp_list[temp_index]][ener_name].mean()
+        else:
+            avg_ener = df[
+                (df["Aim Temp (K)"] == temp_list[temp_index]) &
+                ((df["Temp Change index"] <= avg_start) |
+                 (df["Temp Change index"] >= -avg_start))][ener_name].mean()
+
+
+        #lag_num = 300
+        df_local = df.loc[
+            (df["Aim Temp (K)"] == temp_list[temp_index]) &
+            (df["Temp Change index"] <= lag_num) &
+            (df["Temp Change index"] >= -lag_num),
+            ["Temp Change index", ener_name]]
+
+        df_local.loc[:, "Time change"] = df_local["Temp Change index"] * time_step * 1e6
+        df_local.loc.__setitem__((slice(None), ("Time change")), df_local["Temp Change index"] * time_step * 1e6)
+        df_local_pos = df_local[df_local["Temp Change index"] > 0]
+        df_local_neg = df_local[df_local["Temp Change index"] < 0]
+        # df_local_neg.loc[:, "Time change"] = -1 * df_local_neg["Time change"]
+        # To avoid warning, Replace by: 
+        df_local_neg.loc.__setitem__((slice(None), ("Time change")), -1 * df_local_neg["Time change"])
+
+
+        if temp_index > 0:
+            sns.lineplot(
+                data=df_local_pos,
+                x="Time change",
+                y=ener_name,
+                markers=True, dashes=False,
+                ci=ci,
+                label=f"E at {temp_list[temp_index]:.2f} K from {temp_list[temp_index-1]:.2f} K"
+            )
+
+        if temp_index < (len(temp_list) - 1):
+            sns.lineplot(
+                data=df_local_neg,
+                x="Time change",
+                markers=True, dashes=False,
+                y=ener_name,
+                ci=ci,
+                label=f"E at {temp_list[temp_index]:.2f} K from {temp_list[temp_index+1]:.2f} K"
+            )
+
+        plt.xlabel("time (ps)")
+        plt.ylabel(ylabel)
+        plt.title(f"Energy after temperature change")
+
+
+        plt.axhline(avg_ener, label=f'avg Epot at {temp_list[temp_index]:.2f} K', linestyle=":", c='gray')
+        plt.legend(bbox_to_anchor=(1.01, 1.0))
+
+        if split_graph:
+            plt.show()
+
+
+def plot_energie_swap_convergence_diff(df, ener_name="new_pot", lag_num = 4,
+    time_ax_name=r"$Time\;(\mu s)$", ylabel=r'$E_{p}$',
+    hue=None, color=None, label=r"$T_{m-1}$ update to $T_{m}$",
+    errorbar=('ci', 95), avg_start=None):
+
+
+    time_step = df.loc[1, time_ax_name] - df.loc[0, time_ax_name]
+    temp_list = df['Aim Temp (K)'].unique()
+    temp_list.sort()
+
+    avg_ener_dict = {}
+
+    print("Compute average energy at each temperature")
+
+    for temp in temp_list:
+
+        if avg_start is None:
+            avg_ener = df[
+                df["Aim Temp (K)"] == temp][ener_name].mean()
+        else:
+            avg_ener = df[
+                (df["Aim Temp (K)"] == temp) &
+                ((df["Temp Change index"] <= avg_start) |
+                 (df["Temp Change index"] >= -avg_start))][ener_name].mean()
+
+        avg_ener_dict[temp] = avg_ener
+
+
+    print(avg_ener_dict)
+
+    print("Compute temperature change index")
+    # Compute time change:
+    time_change_list = []
+    for temp_change_index in df["Temp Change index"]:
+        time_change_list.append(temp_change_index * time_step * 1e6)
+
+    df["Time change"] = time_change_list
+
+    print("Compute Energy difference to average")
+    energie_diff_list = []
+    for temp, ener in zip(
+            df['Aim Temp (K)'], 
+            df[ener_name]):
+        
+        ener_diff = ener - avg_ener_dict[temp]
+        energie_diff_list.append(ener_diff)
+    
+    df["Energie Diff"] = energie_diff_list
+
+    df_pos = df[
+        (df["Temp Change index"] > 0) &
+        (df["Temp Change index"] < lag_num)]
+    df_neg = df[
+        (df["Temp Change index"] < 0) &
+        (df["Temp Change index"] > -lag_num)]
+
+    df_neg.loc[:, "Time change"] *= -1
+
+    print('Plot graph')
+
+    sns.lineplot(
+        data=df_pos,
+        x="Time change",
+        y="Energie Diff",
+        hue=hue,
+        markers=True, dashes=False,
+        errorbar=errorbar,
+        linestyle='--',
+        color=color,
+        label=None
+    )
+
+    sns.lineplot(
+        data=df_neg,
+        x="Time change",
+        y="Energie Diff",
+        hue=hue,
+        markers=True, dashes=False,
+        errorbar=errorbar,
+        color=color,
+        label=label
+    )
+
+    plt.xlabel(r"time $(ps)$")
+    plt.ylabel(ylabel)
+    plt.title(f"Energy evolution after temperature change")
+    plt.legend(bbox_to_anchor=(1.01, 1.0))
+
+
+def plot_energie_swap_distri_diff(df, lag_num_list, ener_name="new_pot",
+        time_ax_name=r"$Time\;(\mu s)$",
+        temp_index=1,
+        ylabel=r'$E_{p}$',
+        hue=None, bins=100,
+        element="step",
+        ci=95, avg_start=0):
+
+
+    time_step = df.loc[1, time_ax_name] - df.loc[0, time_ax_name]
+    temp_list = df['Aim Temp (K)'].unique()
+    temp_list.sort()
+
+    # Compute time change:
+    time_change_list = []
+    for temp_change_index in df["Temp Change index"]:
+        time_change_list.append(round(temp_change_index * time_step * 1e6, 1))
+
+    df["update (ps)"] = time_change_list
+
+    print('Plot graph')
+
+    fig, ax1 = plt.subplots()
+
+    sns.histplot(
+        df[(df["Aim Temp (K)"] == temp_list[temp_index]) &
+           ((df["Temp Change index"] > avg_start) | (df["Temp Change index"] < -avg_start))],
+        stat="density",
+        kde=True,
+        bins=bins, fill=False,
+        x=ener_name, common_norm=False,
+        linewidth=1, alpha=0.3,
+        element='step',
+        color='black',
+        label=temp_list[temp_index],
+        line_kws={'linestyle':'-'},
+        ax=ax1)
+
+    sns.histplot(
+        df[(df["Aim Temp (K)"] == temp_list[temp_index-1]) &
+           ((df["Temp Change index"] > avg_start) | (df["Temp Change index"] < -avg_start))],
+        stat="density",
+        kde=True,
+        bins=bins, fill=False,
+        x=ener_name, common_norm=False,
+        linewidth=1, alpha=0.3,
+        element='step',
+        color='black',
+        label=temp_list[temp_index-1],
+        line_kws={'linestyle':'--'},
+        ax=ax1)
+
+    sns.histplot(
+        df[(df["Aim Temp (K)"] == temp_list[temp_index+1]) &
+           ((df["Temp Change index"] > avg_start) | (df["Temp Change index"] < -avg_start))],
+        stat="density",
+        kde=True,
+        bins=bins, fill=False,
+        x=ener_name, common_norm=False,
+        linewidth=1, alpha=0.3,
+        element='step',
+        color='black',
+        line_kws={'linestyle':':'},
+        label=temp_list[temp_index+1],
+        ax=ax1)
+
+    df_pos = df[
+        (df["Aim Temp (K)"] == temp_list[temp_index]) &
+        (df["Temp Change index"].isin(lag_num_list))]
+    df_pos["update (ps)"] = pd.Categorical(df_pos["update (ps)"])
+
+    sns.histplot(
+        df_pos, stat="density",
+        kde=True,
+        bins=bins, fill=False,
+        x=ener_name, common_norm=False,
+        linewidth=1, alpha=0.3,
+        hue="update (ps)",
+        element='step',
+        line_kws={'linestyle':'--'},
+        ax=ax1)
+
+    df_neg = df.loc[
+        (df["Aim Temp (K)"] == temp_list[temp_index]) &
+        (df["Temp Change index"].isin([-lag for lag in lag_num_list]))]
+    df_neg["update (ps)"] *= -1
+    df_neg["update (ps)"] = pd.Categorical(df_neg["update (ps)"])
+
+    sns.histplot(
+        df_neg, stat="density",
+        kde=True,
+        bins=bins, fill=False,
+        x=ener_name, common_norm=False,
+        linewidth=1, alpha=0.3,
+        hue="update (ps)",
+        element='step',
+        line_kws={'linestyle':':'},
+        ax=ax1)
+
+    sns.move_legend(
+        ax1,
+        "upper left",
+        bbox_to_anchor=(1, 1),
+        title_fontsize=9)
+    #ax1.legend(bbox_to_anchor=(1.01, 1.0))
+
+    legend = ax1.get_legend()
+    handles = legend.legendHandles
+
+    # Remove alpha in legend
+    for h in handles:
+        h.set_alpha(1.0)
+
+    e_min, e_max = get_quant_min_max(
+        df[df["Aim Temp (K)"] == temp_list[temp_index]][ener_name],
+        quant=0.01)
+
+    ymin, ymax = ax1.get_ylim()
+    y_text = ymax - (ymax-ymin)/20
+
+    plt.annotate(f"{round(temp_list[temp_index-1],1)} K", xy=(e_min, y_text))
+    plt.annotate(f"{round(temp_list[temp_index],1)} K", xy=(e_min + (e_max-e_min)/2 - (e_max-e_min)/10, y_text))
+    plt.annotate(f"{round(temp_list[temp_index+1],1)} K", xy=(e_max - (e_max-e_min)/5.5, y_text))
+
+    plt.xlim(e_min, e_max)
+    plt.xlabel(ylabel)
+    plt.tight_layout()
+
+    return ax1
