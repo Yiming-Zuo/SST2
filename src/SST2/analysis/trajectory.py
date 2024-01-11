@@ -75,14 +75,21 @@ def align_traj(md, ref, ref_Sel, tol_mass=0.1):
     _ = alignment.run()
 
 
-def compute_native_contact(md, ref, sel='protein and not name H*'):
+def compute_native_contact(md, ref, sel='protein and not name H*', sel_2=None):
 
     ref.trajectory[-1]
     ref_atom_sel = ref.select_atoms(sel)
 
+    if sel_2 is None:
+        sel_2 = sel
+        ref_atom_sel_2 = ref_atom_sel
+    else:
+        ref_atom_sel_2 = ref.select_atoms(sel_2)
+
+
     ca = contacts.Contacts(md,
-                           select=(sel, sel),
-                           refgroup=(ref_atom_sel, ref_atom_sel),
+                           select=(sel, sel_2),
+                           refgroup=(ref_atom_sel, ref_atom_sel_2),
                            kwargs={'beta': 5.0,
                                    'lambda_constant': 1.8},
                            method='soft_cut').run(verbose=True)

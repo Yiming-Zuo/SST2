@@ -451,7 +451,8 @@ def plot_distri_norm(
     max_data=50000,
     bins=100,
     element="step",
-    quant=None):
+    quant=None,
+    bw_adjust=None):
     """
     Plot a distribution plot with a gaussian filter on the y axis.
 
@@ -473,6 +474,8 @@ def plot_distri_norm(
         Element of the plot. The default is "step".
     quant : float, optional
         Quantile to use to filter the data. The default is None.
+    bw_adjust : float, optional
+        Bandwidth adjustment for the kernel density estimate. The default is None.
 
     Returns
     -------
@@ -486,6 +489,10 @@ def plot_distri_norm(
     if x_label is None:
         x_label = x
 
+    if bw_adjust is None:
+        kde_kws = {}
+    else:
+        kde_kws = {"bw_adjust": bw_adjust}
 
     fig, ax1 = plt.subplots()
 
@@ -496,7 +503,7 @@ def plot_distri_norm(
         x=x, common_norm=False,
         linewidth=1, alpha=0.3,
         hue=hue, element=element,
-        ax=ax1)
+        ax=ax1, kde_kws=kde_kws)
 
     if quant is not None:
         x_min, x_max = get_quant_min_max(local_df[x], quant)
@@ -737,8 +744,7 @@ def plot_weight_RMSD(df,
 
     return
 
-
-
+"""
 def plot_free_energy(
         xall, yall, weights=None, ax=None, nbins=100, ncontours=100,
         avoid_zero_count=False, minener_zero=True, kT=2.479,
@@ -746,9 +752,9 @@ def plot_free_energy(
         cbar_label='free energy (kJ/mol)', cax=None, levels=None,
         cbar_orientation='vertical', norm=None, range=None,
         level_gap=None):
-    """ Adapted from;
-     https://github.com/markovmodel/PyEMMA/blob/devel/pyemma/plots/plots2d.py
-    """
+    #Adapted from;
+    # https://github.com/markovmodel/PyEMMA/blob/devel/pyemma/plots/plots2d.py
+    #
     
     z, xedge, yedge = np.histogram2d(
         xall, yall, bins=nbins, weights=weights, range=range)
@@ -768,10 +774,100 @@ def plot_free_energy(
 
     # to show the highest free energy zones in the map,
     # replace infinity by a value slightly above the maximum free energy:
-    free_energy[zero] = np.max(free_energy[nonzero])+1.0
+
+    if vmax is None:
+        vmax = np.max(free_energy[nonzero])+0.5
+
+    #free_energy[zero] = vmax + 10.0
+    free_energy[zero] = np.NaN
+
+    if vmin is None:
+        vmin = 0
+
     # and fix the levels for the colormap:
     if levels is None:
-        levels = np.linspace(0, np.max(free_energy[nonzero])+0.5, ncontours)
+        cbar_ticks = np.linspace(vmin, vmax, ncontours)
+    else:
+        cbar_ticks = np.linspace(vmin, vmax, levels + 1)      
+
+    #print(vmax, cbar_ticks)
+
+    if ax is None:
+        fig, ax = plt.subplots()
+    else:
+        fig = ax.get_figure()
+    
+    if levels is None and level_gap is not None:
+        max_free = np.max(free_energy[nonzero])
+        levels = int(max_free // level_gap)
+        print(levels)
+
+    mappable = ax.contourf(
+        x, y, free_energy, ncontours, norm=norm,
+        vmin=vmin, vmax=vmax, cmap=cmap,
+        #extend='both',
+        levels=cbar_ticks)
+    
+    misc = dict(mappable=mappable)
+    if cbar:
+        if levels is not None:
+            #print("ticks", levels, cbar_ticks)
+            cbar = fig.colorbar(
+                mappable,
+                ax=ax,
+                orientation=cbar_orientation,
+                ticks=cbar_ticks,
+                #extend='both'
+                )
+        else:
+            cbar = fig.colorbar(mappable, ax=ax, orientation=cbar_orientation)
+        cbar.set_label(cbar_label)
+        misc.update(cbar=cbar)
+
+    return fig, ax, misc
+"""
+
+def plot_free_energy(
+        xall, yall, weights=None, ax=None, nbins=100, ncontours=100,
+        avoid_zero_count=False, minener_zero=True, kT=2.479,
+        vmin=None, vmax=None, cmap='nipy_spectral', cbar=True,
+        cbar_label='free energy (kJ/mol)', cax=None, levels=None,
+        cbar_orientation='vertical', norm=None, range=None,
+        level_gap=None):
+    # Adapted from;
+    # https://github.com/markovmodel/PyEMMA/blob/devel/pyemma/plots/plots2d.py
+    #
+    
+    z, xedge, yedge = np.histogram2d(
+        xall, yall, bins=nbins, weights=weights, range=range)
+    if avoid_zero_count:
+        z = np.maximum(z, np.min(z[z.nonzero()]))
+    x = 0.5 * (xedge[:-1] + xedge[1:])
+    y = 0.5 * (yedge[:-1] + yedge[1:])
+    
+    pi = z.T / float(z.sum())
+    free_energy = np.inf * np.ones(shape=z.shape)
+    nonzero = pi.nonzero()
+    zero = np.nonzero(pi == 0)
+    free_energy[nonzero] = -np.log(pi[nonzero])
+    #if minener_zero:
+    free_energy[nonzero] -= np.min(free_energy[nonzero])
+    free_energy *= kT
+
+    # to show the highest free energy zones in the map,
+    # replace infinity by a value slightly above the maximum free energy:
+
+    if vmax is None:
+        vmax = np.max(free_energy[nonzero])+0.5
+    #free_energy[zero] = np.max(free_energy[nonzero])+1.0
+    free_energy[zero] = vmax+0.5
+    if vmin is None:
+        vmin = 0
+    # and fix the levels for the colormap:
+    if levels is None:
+        cbar_ticks = np.linspace(vmin, vmax, ncontours)
+    else:
+        cbar_ticks = np.linspace(vmin, vmax, levels + 1)            
 
     if ax is None:
         fig, ax = plt.subplots()
@@ -786,19 +882,33 @@ def plot_free_energy(
     mappable = ax.contourf(
         x, y, free_energy, ncontours, norm=norm,
         vmin=vmin, vmax=vmax, cmap=cmap,
-        levels=levels)
+        levels=cbar_ticks)
     
     misc = dict(mappable=mappable)
     if cbar:
-        cbar = fig.colorbar(
-            mappable,
-            ax=ax,
-            orientation=cbar_orientation)
+        if levels is not None:
+            #print("ticks", levels, cbar_ticks)
+            cbar = fig.colorbar(
+                mappable,
+                ax=ax,
+                orientation=cbar_orientation,
+                ticks=cbar_ticks,
+                #extend='both'
+                )
+        else:
+            cbar = fig.colorbar(mappable, ax=ax, orientation=cbar_orientation)
         cbar.set_label(cbar_label)
         misc.update(cbar=cbar)
+
+    #if cbar:
+    #    cbar = fig.colorbar(
+    #        mappable,
+    #        ax=ax,
+    #        orientation=cbar_orientation)
+    #    cbar.set_label(cbar_label)
+    #    misc.update(cbar=cbar)
         
     return fig, ax, misc
-
 
 def compute_cluster_hdbscan(pca_df, min_cluster_size=50, min_samples=50):
 
