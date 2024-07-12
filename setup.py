@@ -1,4 +1,4 @@
-from setuptools import setup, find_packages
+from setuptools import setup
 
 version = "0.0.1"
 
@@ -24,7 +24,7 @@ setup(
     author='Samuel Murail',
     author_email="samuel.murail@u-paris.fr",
     url='https://github.com/samuelmurail/SST2',
-    packages=find_packages(),
+    packages=['SST2', 'SST2.analysis'],
     package_dir={'SST2': 'src/SST2'},
     entry_points={'console_scripts': ['SST2 = SST2.__main__:main']},
     include_package_data=True,
