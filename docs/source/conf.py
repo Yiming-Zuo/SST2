@@ -18,10 +18,12 @@ release = '0.0.1'
 #
 import os
 import sys
-sys.path.insert(0, os.path.abspath('../../src/'))
+
+# Since the addition of `.readthedocs.yaml` file, the following line is not needed anymore
+# sys.path.insert(0, os.path.abspath('../../src/'))
 
 # This command doesn't get any sense for me (previous one should be enough)
-sys.path.insert(0, os.path.abspath('../../src/SST2/'))
+# sys.path.insert(0, os.path.abspath('../../src/SST2/'))
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
@@ -71,7 +73,19 @@ man_pages = [
 ]
 
 # autodoc_mock_imports = ["numpy", "scipy", "pytest"]
-autodoc_mock_imports = ["pytest", "pdbfixer"]
+autodoc_mock_imports = [
+    "pytest",
+    "pdbfixer",
+    "numpy",
+    "pandas",
+    "pdb_numpy",
+    "matplotlib",
+    "seaborn",
+    "MDAnalysis",
+    "scipy",
+    "ipywidgets",
+    "unit"
+    ]
 
 # Exclude unit pages (tests and data) from the documentation
 exclude_patterns = ['SST2.tests.rst', 'modules.rst']

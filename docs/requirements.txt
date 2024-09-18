@@ -4,3 +4,6 @@ sphinx_rtd_theme>=1.2.0
 nbsphinx>=0.9.1
 numpydoc>=1.5.0
 myst_parser>=1.0.0
+openmm>=7.5.1 # Mandatory, because function take unit as input
+numpy>=1.2
+cython>=3.0
