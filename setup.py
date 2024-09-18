@@ -2,13 +2,13 @@ from setuptools import setup
 
 version = "0.0.1"
 
-with open('README.rst', encoding='utf-8') as readme_file:
+with open('README.md', encoding='utf-8') as readme_file:
     readme = readme_file.read()
 
 requirements = [
     'openmm>=7.7.0',
-    'pdb_numpy>=0.0.1',
-    'pandas>=1.3.0',
+    'pdb_numpy>=0.0.11',
+    'pandas==2.1.4',
     'pdbfixer>=1.9.0',
 ]
 
