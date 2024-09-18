@@ -20,7 +20,7 @@ import os
 import sys
 
 # Since the addition of `.readthedocs.yaml` file, the following line is not needed anymore
-# sys.path.insert(0, os.path.abspath('../../src/'))
+sys.path.insert(0, os.path.abspath('../../src/'))
 
 # This command doesn't get any sense for me (previous one should be enough)
 # sys.path.insert(0, os.path.abspath('../../src/SST2/'))
@@ -76,15 +76,13 @@ man_pages = [
 autodoc_mock_imports = [
     "pytest",
     "pdbfixer",
-    "numpy",
+    "seaborn",
+    "matplotlib",
+    "MDAnalysis",
     "pandas",
     "pdb_numpy",
-    "matplotlib",
-    "seaborn",
-    "MDAnalysis",
     "scipy",
     "ipywidgets",
-    "unit"
     ]
 
 # Exclude unit pages (tests and data) from the documentation
