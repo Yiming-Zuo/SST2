@@ -37,7 +37,9 @@ extensions = [
     'sphinxarg.ext',
     'sphinx.ext.mathjax',
     'numpydoc',
-    'myst_parser']
+    'myst_parser',
+    'nbsphinx',
+    ]
 
 templates_path = ['_templates']
 exclude_patterns = []
@@ -45,8 +47,8 @@ exclude_patterns = []
 # The suffix(es) of source filenames.
 # You can specify multiple suffix as a list of string:
 #
-# source_suffix = ['.rst', '.md']
-source_suffix = ['.rst', '.ipynb', '.md']
+# source_suffix = ['.rst', '.ipynb', '.md']
+source_suffix = ['.rst', '.md']
 
 
 # -- Options for HTML output -------------------------------------------------
@@ -69,7 +71,7 @@ man_pages = [
 ]
 
 # autodoc_mock_imports = ["numpy", "scipy", "pytest"]
-autodoc_mock_imports = ["pytest"]
+autodoc_mock_imports = ["pytest", "pdbfixer"]
 
 # Exclude unit pages (tests and data) from the documentation
 exclude_patterns = ['SST2.tests.rst', 'modules.rst']
