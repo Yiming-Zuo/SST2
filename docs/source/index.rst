@@ -15,6 +15,7 @@ Welcome to SST2's documentation!
    readme
    Github project <https://github.com/samuelmurail/SST2>
    SST2
+   SST2.analysis
 
 Indices and tables
 ==================

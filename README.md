@@ -1,4 +1,4 @@
-<img src="https://raw.githubusercontent.com/samuelmurail/SST2/master/docs/source/logo.jpeg" alt="AF2 Analysis Logo" width="200" style="display: block; margin: auto;"/>
+<img src="https://raw.githubusercontent.com/samuelmurail/SST2/master/docs/source/logo.jpeg" alt="AF2 Analysis Logo" width="400" style="display: block; margin: auto;"/>
 
 # Simulated Solute Tempering 2, SST2
 
@@ -14,6 +14,7 @@ Tempering (SST2) simulations using the `openmm` library.
 
 - REST2 potential energy implementation
 - SST2 simulations
+- ST simulation
 
 For more examples and documentation, see the ``SST2`` documentation at
 https://SST2.readthedocs.io/en/latest/readme.html.
