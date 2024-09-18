@@ -1,0 +1,48 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "SST2"
+version = "0.0.1"
+dynamic = ["readme", "dependencies"]
+description = "`SST2` is a python library designed to conduct Simulated Solute Tempering (SST2) simulations using the openmm library."
+license = {text = "GNUv2.0"}
+requires-python = ">=3.7"
+authors = [
+    { name = "Samuel Murail", email = "samuel.murail@u-paris.fr" },
+]
+keywords = [
+        "SST2",
+        "Python",
+        "openmm",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Natural Language :: English",
+    "License :: OSI Approved :: BSD License",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.7",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: Implementation :: PyPy",
+    "Programming Language :: Python",
+    "Topic :: Software Development",
+]
+
+
+[project.scripts]
+SST2 = "SST2.__main__:main"
+
+[project.urls]
+Homepage = "https://github.com/samuelmurail/SST2"
+
+
+[tool.setuptools.dynamic]
+# version = {attr = "SST2.VERSION"}
+readme = {file = ["README.md"]}
+dependencies = {file = ["requirements.txt"]}
