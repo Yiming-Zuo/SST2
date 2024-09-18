@@ -9,7 +9,7 @@ requirements = [
     'openmm>=7.7.0',
     'pdb_numpy>=0.0.11',
     'pandas==2.1.4',
-    'pdbfixer>=1.9.0',
+    #'pdbfixer>=1.9.0',
 ]
 
 setup(
