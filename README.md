@@ -28,10 +28,15 @@ to contribute code, please fork the repository and submit a pull request.
 
 ## Author
 
-* `Samuel Murail <https://samuelmurail.github.io/PersonalPage/>`_, Associate Professor - `Université Paris Cité <https://u-paris.fr>`_, `CMPLI <http://bfa.univ-paris-diderot.fr/equipe-8/>`_.
+* [Samuel Murail](https://samuelmurail.github.io/PersonalPage/), Associate Professor - [Université Paris Cité](https://u-paris.fr), [CMPLI](http://bfa.univ-paris-diderot.fr/equipe-8/).
 
-See also the list of `contributors <https://github.com/samuelmurail/SST2/contributors>`_ who participated in this project.
+See also the list of [contributors](https://github.com/samuelmurail/SST2/contributors) who participated in this project.
 
 ## License
 
 This project is licensed under the GNU General Public License v2.0 - see the ``LICENSE`` file for details.
+
+## References
+
+- Stratmann D, Moroy G, Tuffery P and Murail S. Simulated Solute Tempering 2.
+*Manuscript in preparation.*

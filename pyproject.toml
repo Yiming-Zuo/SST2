@@ -13,9 +13,10 @@ authors = [
     { name = "Samuel Murail", email = "samuel.murail@u-paris.fr" },
 ]
 keywords = [
-        "SST2",
-        "Python",
-        "openmm",
+        "Simulated Solute Tempering 2",
+        "Simulated Tempering",
+        "Molecular Dynamics",
+        "Openmm",
 ]
 classifiers = [
     "Development Status :: 4 - Beta",
@@ -34,13 +35,11 @@ classifiers = [
     "Topic :: Software Development",
 ]
 
-
 [project.scripts]
 SST2 = "SST2.__main__:main"
 
 [project.urls]
-Homepage = "https://github.com/samuelmurail/SST2"
-
+Homepage = "https://sst2.readthedocs.io"
 
 [tool.setuptools.dynamic]
 # version = {attr = "SST2.VERSION"}
