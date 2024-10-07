@@ -1,15 +1,13 @@
 Implementation
 ==============
 
+
 The ST and SST2 protocol has been implemented by a Python
 script using `OpenMM(Eastman *et al.* 2017) <https://openmm.org/>`_.
 ST's original OpenMM script, written by Peter Eastman, was
 modified to implement the weight calculation of
-Park and Pande
-and the *on the fly*
-weight calculation from
-Nguyen *et al.* 2013.
-The same script
+Park and Pande and the *on the fly* weight calculation from
+Nguyen *et al.* 2013. The same script
 was also used to write the SST2 scripts.
 
 The scaling of non-bonded interactions was done by scaling the

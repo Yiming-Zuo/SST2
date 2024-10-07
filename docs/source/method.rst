@@ -4,7 +4,6 @@ Method Description
 The Simulated Solvent Tempering 2 (SST2) algorithm is an enhanced sampling method for molecular dynamics (MD) simulations. It combines aspects of Simulated Tempering (ST)
 and Replica Exchange with Solute Tempering 2 (REST2) to overcome limitations in traditional MD simulations when dealing with systems that have high energy barriers. The key aim of SST2 is to enhance the exploration of conformational space and gain a better understanding of the thermodynamics and kinetics of biomolecular systems.
 
-
 We used a slightly modified version of the original implementation of
 REST2. In the approach proposed 
 in Stirnemann and Sterpone, only the proper torsion

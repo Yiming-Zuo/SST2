@@ -31,6 +31,12 @@ $ cd SST2
 conda env create -f environment.yml
 ```
 
+or mamba:
+
+```bash
+mamba env create -f environment.yml
+```
+
 ## Test installation
 
 Use `pytest` to check that the installation was successful:

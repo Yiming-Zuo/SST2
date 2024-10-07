@@ -1,6 +1,8 @@
 # Basic usage
 
-We provide several python script to use `SST2` in a projectm, the script are located in the `bin` directory of the `SST2` package. The scripts are:
+## Scripts
+
+We provide several python script to use `SST2` in a project, the script are located in the `bin` directory of the `SST2` package. The scripts are:
 
 * `launch_ST_abinitio_seq.py`
 * `launch_ST_pdb.py`
@@ -16,33 +18,47 @@ The scripts have several options that can be displayed by using the `--help` opt
 ```bash
 $ python bin/launch_ST_abinitio_seq.py --help
 usage: launch_ST_abinitio_seq.py [-h] -seq SEQ -n NAME -dir OUT_DIR [-pad PAD]
-                                 [-eq_time_impl EQ_TIME_IMPL] [-eq_time_expl EQ_TIME_EXPL]
-                                 [-time TIME] [-temp_list TEMP_LIST [TEMP_LIST ...]]
-                                 [-temp_time TEMP_TIME] [-log_time LOG_TIME] [-min_temp MIN_TEMP]
-                                 [-last_temp LAST_TEMP] [-hmr HMR] [-temp_num TEMP_NUM]
-                                 [-friction FRICTION]
-
-Simulate a peptide starting from a linear conformation.
-
-options:
-  -h, --help            show this help message and exit
-  -seq SEQ              Input Sequence
-  -n NAME               Output file name
-  -dir OUT_DIR          Output directory for intermediate files
-  -pad PAD              Box padding, default=1.5 nm
-  -eq_time_impl EQ_TIME_IMPL
-                        Implicit solvent Equilibration time, default=10 (ns)
-  -eq_time_expl EQ_TIME_EXPL
-                        Explicit Solvent Equilibration time, default=10 (ns)
-  -time TIME            ST time, default=10.000 (ns)
-  -temp_list TEMP_LIST [TEMP_LIST ...]
-                        SST2 temperature list, default=None
-  -temp_time TEMP_TIME  ST temperature time change interval, default=2.0 (ps)
-  -log_time LOG_TIME    ST log save time interval, default= temp_time=2.0 (ps)
-  -min_temp MIN_TEMP    Base temperature, default=300(K)
-  -last_temp LAST_TEMP  Base temperature, default=500(K)
-  -hmr HMR              Hydrogen mass repartition, default=3.0 a.m.u.
-  -temp_num TEMP_NUM    Temperature rung number, default=None (computed as function of Epot)
-  -friction FRICTION    Langevin Integrator friction coefficient default=10.0 (ps-1)
+                                 [-eq_time_impl EQ_TIME_IMPL] [-eq_time_expl\
+...
+...
 ```
 
+## ST simulations
+
+* Here is an example to launch a ST simulation of a protein with a given sequence:
+
+```bash
+python bin/launch_ST_abinitio_seq.py  -seq NLYIQWLKDGGPSSGRPPPS -time 1000 -temp_time 4 -min_temp 280 -last_temp 600 -n TrpCage -dir tmp_TrpCage
+```
+
+This command will perform a ST simulation of the TrpCage protein with the sequence `NLYIQWLKDGGPSSGRPPPS`. For *ab initio* simulations, an linear structure of the peptide is created and equilibrated in implicit solvent for 10ns, the system is then solvated and equilibrated in explicit solvent for 10 ns. A 1000 ns ST simulation will then be launched. 
+ST will used temperatures distributed exponentially between 280 K to 600 K, with a temperature time change interval of 4 ps. The results will be saved in the `tmp_TrpCage` directory.
+
+* Here is an example to launch a ST simulation of a protein from a given pdb:
+
+```bash
+python bin/launch_ST_pdb.py  -pdb my_structure.pdb -time 1000 -temp_time 4 -min_temp 280 -last_temp 600 -n TrpCage -dir tmp_TrpCage
+```
+
+Here the implicit solvent equilibration is skipped, the system is directly solvated and equilibrated in explicit solvent for 10 ns. The rest of the simulation is the same as the previous example.
+
+# SST2 simulations
+
+* To launch SST2 simulation of a protein with a given sequence:
+
+```bash
+python bin/launch_sst2_abinitio_seq.py  -seq NLYIQWLKDGGPSSGRPPPS -time 1000 -temp_time 4 -min_temp 280 -ref_temp 320 -last_temp 600 -n TrpCage -dir tmp_SST2_TrpCage -exclude_Pro_omega
+```
+
+This command will perform a SST2 simulation of the TrpCage protein with the sequence `NLYIQWLKDGGPSSGRPPPS`. For *ab initio* simulations, an linear structure of the peptide is created and equilibrated in implicit solvent for 10ns, the system is then solvated and equilibrated in explicit solvent for 10 ns. A 1000 ns STT2 simulation will then be launched. 
+STT2 will used temperatures distributed exponentially between 280 K to 600 K with a reference temperature of 320 K, the temperature time change interval is 4 ps. The results will be saved in the `tmp_SST2_TrpCage` directory.
+
+Here we use the `-exclude_Pro_omega` option to exclude proline $\omega$ angles from SST2 scaling.
+
+* SST2 simulation of a protein from a given pdb:
+
+```bash
+python bin/launch_sst2_pdb.py  -pdb my_structure.pdb -time 1000 -temp_time 4 -min_temp 280 -ref_temp 320 -last_temp 600 -n TrpCage -dir tmp_SST2_TrpCage -exclude_Pro_omega
+```
+
+STT2 will used temperatures distributed exponentially between 280 K to 600 K with a reference temperature of 320 K, the temperature time change interval is 4 ps. The results will be saved in the `tmp_SST2_TrpCage` directory.
