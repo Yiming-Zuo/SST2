@@ -12,10 +12,12 @@ We provide several python script to use `SST2` in a project, the script are loca
 The other scripts are experimental and should be used with caution.
 
 all scripts use:
-* Amber99sbnmr forcefield for implicit solvent simulations
-* Amber14SB forcefield for explicit solvent simulations, with TIP3P water model
+
+* Amber99sbnmr force-field for implicit solvent simulations
+* Amber14SB force-field for explicit solvent simulations, with TIP3P water model
 * Use the `pdbfixer` to fix the pdb files and assign a **pH=7.0** protonation state to the peptide.
 
+If you want to use another force-field or pH, you can modify the scripts accordingly.
 
 ## Available options
 
