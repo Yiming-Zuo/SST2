@@ -11,6 +11,12 @@ We provide several python script to use `SST2` in a project, the script are loca
 
 The other scripts are experimental and should be used with caution.
 
+all scripts use:
+* Amber99sbnmr forcefield for implicit solvent simulations
+* Amber14SB forcefield for explicit solvent simulations, with TIP3P water model
+* Use the `pdbfixer` to fix the pdb files and assign a **pH=7.0** protonation state to the peptide.
+
+
 ## Available options
 
 The scripts have several options that can be displayed by using the `--help` option. For example:
@@ -23,12 +29,14 @@ usage: launch_ST_abinitio_seq.py [-h] -seq SEQ -n NAME -dir OUT_DIR [-pad PAD]
 ...
 ```
 
-## ST simulations
+## Folding ST simulations
 
 * Here is an example to launch a ST simulation of a protein with a given sequence:
 
 ```bash
-python bin/launch_ST_abinitio_seq.py  -seq NLYIQWLKDGGPSSGRPPPS -time 1000 -temp_time 4 -min_temp 280 -last_temp 600 -n TrpCage -dir tmp_TrpCage
+python bin/launch_ST_abinitio_seq.py  -seq NLYIQWLKDGGPSSGRPPPS\
+    -time 1000 -temp_time 4 -min_temp 280 -last_temp 600\
+    -n TrpCage -dir tmp_TrpCage
 ```
 
 This command will perform a ST simulation of the TrpCage protein with the sequence `NLYIQWLKDGGPSSGRPPPS`. For *ab initio* simulations, an linear structure of the peptide is created and equilibrated in implicit solvent for 10ns, the system is then solvated and equilibrated in explicit solvent for 10 ns. A 1000 ns ST simulation will then be launched. 
@@ -37,17 +45,21 @@ ST will used temperatures distributed exponentially between 280 K to 600 K, with
 * Here is an example to launch a ST simulation of a protein from a given pdb:
 
 ```bash
-python bin/launch_ST_pdb.py  -pdb my_structure.pdb -time 1000 -temp_time 4 -min_temp 280 -last_temp 600 -n TrpCage -dir tmp_TrpCage
+python bin/launch_ST_pdb.py  -pdb my_structure.pdb -time 1000\
+    -temp_time 4 -min_temp 280 -last_temp 600 -n TrpCage\
+    -dir tmp_TrpCage
 ```
 
 Here the implicit solvent equilibration is skipped, the system is directly solvated and equilibrated in explicit solvent for 10 ns. The rest of the simulation is the same as the previous example.
 
-# SST2 simulations
+## Folding SST2 simulations
 
 * To launch SST2 simulation of a protein with a given sequence:
 
 ```bash
-python bin/launch_sst2_abinitio_seq.py  -seq NLYIQWLKDGGPSSGRPPPS -time 1000 -temp_time 4 -min_temp 280 -ref_temp 320 -last_temp 600 -n TrpCage -dir tmp_SST2_TrpCage -exclude_Pro_omega
+python bin/launch_sst2_abinitio_seq.py  -seq NLYIQWLKDGGPSSGRPPPS\
+ -time 1000 -temp_time 4 -min_temp 280 -ref_temp 320 -last_temp 600\
+  -n TrpCage -dir tmp_SST2_TrpCage -exclude_Pro_omega
 ```
 
 This command will perform a SST2 simulation of the TrpCage protein with the sequence `NLYIQWLKDGGPSSGRPPPS`. For *ab initio* simulations, an linear structure of the peptide is created and equilibrated in implicit solvent for 10ns, the system is then solvated and equilibrated in explicit solvent for 10 ns. A 1000 ns STT2 simulation will then be launched. 
@@ -58,7 +70,21 @@ Here we use the `-exclude_Pro_omega` option to exclude proline $\omega$ angles f
 * SST2 simulation of a protein from a given pdb:
 
 ```bash
-python bin/launch_sst2_pdb.py  -pdb my_structure.pdb -time 1000 -temp_time 4 -min_temp 280 -ref_temp 320 -last_temp 600 -n TrpCage -dir tmp_SST2_TrpCage -exclude_Pro_omega
+python bin/launch_sst2_pdb.py  -pdb my_structure.pdb -time 1000\
+ -temp_time 4 -min_temp 280 -ref_temp 320 -last_temp 600 -n TrpCage\
+  -dir tmp_SST2_TrpCage -exclude_Pro_omega
 ```
 
 STT2 will used temperatures distributed exponentially between 280 K to 600 K with a reference temperature of 320 K, the temperature time change interval is 4 ps. The results will be saved in the `tmp_SST2_TrpCage` directory.
+
+## Binding SST2 simulations
+
+* To launch SST2 simulation of a protein-ligand complex with a given structure:
+
+```bash
+python bin/launch_sst2_pdb.py  -pdb my_structure.pdb -time 1000\
+ -temp_time 4 -min_temp 280 -ref_temp 320 -last_temp 600 -n Complex\
+  -dir tmp_SST2_Complex -chain B
+```
+
+- The `-chain B` option is used to specify the chain of the ligand or *solute* in the pdb file.
