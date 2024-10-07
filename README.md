@@ -1,23 +1,48 @@
+[![Documentation Status](https://readthedocs.org/projects/sst2/badge/?version=latest)](https://sst2.readthedocs.io/en/latest/?badge=latest)
+
+
 <img src="https://raw.githubusercontent.com/samuelmurail/SST2/master/docs/source/logo.jpeg" alt="AF2 Analysis Logo" width="400" style="display: block; margin: auto;"/>
 
-# Simulated Solute Tempering 2, SST2
+# Simulated Solute Tempering 2 (SST2)
 
-``SST2`` is a python library designed to conduct Simulated Solute
-Tempering (SST2) simulations using the `openmm` library.
+## Description
 
-
-* Source code repository:
-   https://github.com/samuelmurail/SST2
+This repository contains the source code for the Simulated Solute Tempering 2 (SST2) algorithm, as described in our paper ["Simulated Solute Tempering 2."](https://www.biorxiv.org/content/10.1101/2024.10.03.613476v1) SST2 is a novel enhanced sampling method for molecular dynamics (MD) simulations that combines the strengths of Simulated Tempering (ST) and Replica Exchange with Solute Tempering 2 (REST2).
 
 
-## Main features:
+* Source code repository on [gihub](https://github.com/samuelmurail/SST2)
+* Documentation on [readthedocs](https://sst2.readthedocs.io/en/latest/)
+* Manuscript on [bioRxiv](https://www.biorxiv.org/content/10.1101/2024.10.03.613476v1)
+* Trajectories on [Zenodo](https://zenodo.org/records/13772542)
 
+
+## Algorithm Overview
+
+SST2 aims to overcome limitations in conformational space exploration often encountered in traditional MD simulations, especially for systems with high energy barriers. SST2 builds on previous methods like REST2 and ST:
+
+- **REST2:** Like REST2, SST2 scales solute-solute and solute-solvent interactions to enhance sampling.
+- **ST:**  SST2 adopts the concept of single simulation traveling across different temperatures (or scaling factors) from ST, but applies it specifically to solute tempering as in REST2.
+
+These features enable SST2 to effectively sample conformational space and provide valuable insights into the thermodynamics and kinetics of biomolecular systems.
+
+
+## library Main features:
+
+- ST simulation using Park and Pande weights calculation, and Phong et al. on the flight weights calculation.
 - REST2 potential energy implementation
 - SST2 simulations
-- ST simulation
+- binary scripts to run ST/SST2 simulations starting from an amino acid sequence or a `pdb` file.
 
-For more examples and documentation, see the ``SST2`` documentation at
-https://SST2.readthedocs.io/en/latest/readme.html.
+## Implementation
+
+This implementation of SST2 utilizes the OpenMM molecular dynamics library. The code is written in Python and utilizes OpenMM's custom forces and integrators to achieve the desired functionality.
+
+## Key Features
+
+- **Efficient Sampling:** By selectively scaling solute interactions and exchanging replicas, SST2 significantly enhances sampling efficiency compared to traditional MD simulations.
+- **Flexibility:** The algorithm allows users to adjust various parameters, including the number of rungs, the range of scaling factors, and the exchange frequency, to optimize performance for different systems.
+- **Open Source:** The code is made available as open source, facilitating further development, adaptation, and application by the research community.
+
 
 ## Contributing
 
@@ -36,7 +61,9 @@ See also the list of [contributors](https://github.com/samuelmurail/SST2/contrib
 
 This project is licensed under the GNU General Public License v2.0 - see the ``LICENSE`` file for details.
 
-## References
+## Citation
+
+If you use this code in your research, please cite our paper:
 
 - Stratmann D, Moroy G, Tuffery P and Murail S. Simulated Solute Tempering 2.
-*Manuscript in preparation.*
+*bioRxiv* 2024, 10.1101/2024.10.03.613476.
