@@ -79,8 +79,6 @@ autodoc_mock_imports = [
     "seaborn",
     "matplotlib",
     "MDAnalysis",
-    "pandas",
-    "pdb_numpy",
     "scipy",
     "ipywidgets",
     ]

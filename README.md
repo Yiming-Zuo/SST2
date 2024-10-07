@@ -66,4 +66,4 @@ This project is licensed under the GNU General Public License v2.0 - see the ``L
 If you use this code in your research, please cite our paper:
 
 - Stratmann D, Moroy G, Tuffery P and Murail S. Simulated Solute Tempering 2.
-*bioRxiv* 2024, 10.1101/2024.10.03.613476.
+*bioRxiv* 2024, doi:10.1101/2024.10.03.613476.
