@@ -67,7 +67,7 @@ python bin/launch_sst2_abinitio_seq.py  -seq NLYIQWLKDGGPSSGRPPPS\
 This command will perform a SST2 simulation of the TrpCage protein with the sequence `NLYIQWLKDGGPSSGRPPPS`. For *ab initio* simulations, an linear structure of the peptide is created and equilibrated in implicit solvent for 10ns, the system is then solvated and equilibrated in explicit solvent for 10 ns. A 1000 ns STT2 simulation will then be launched. 
 STT2 will used temperatures distributed exponentially between 280 K to 600 K with a reference temperature of 320 K, the temperature time change interval is 4 ps. The results will be saved in the `tmp_SST2_TrpCage` directory.
 
-Here we use the `-exclude_Pro_omega` option to exclude proline $\omega$ angles from SST2 scaling.
+Here we use the `-exclude_Pro_omega` option to exclude proline {math}`\omega` angles from SST2 scaling.
 
 * SST2 simulation of a protein from a given pdb:
 
