@@ -14,8 +14,10 @@ Welcome to SST2's documentation!
 
    readme
    Github project <https://github.com/samuelmurail/SST2>
+   installation
    method
    implementation
+   usage
    SST2
    SST2.analysis
 

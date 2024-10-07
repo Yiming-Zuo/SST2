@@ -1,0 +1,12 @@
+name: SST2
+channels:
+  - conda-forge
+dependencies:
+  - python>=3.8
+  - openmm>=7.7.0
+  - pandas==2.1.4
+  - pdbfixer>=1.9.0
+  - pip
+  - pip:
+    - pdb_numpy>=0.0.1
+    - "."
