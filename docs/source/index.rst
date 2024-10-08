@@ -13,7 +13,6 @@ Welcome to SST2's documentation!
    :caption: Table of Contents:
 
    readme
-   Github project <https://github.com/samuelmurail/SST2>
    installation
    method
    implementation

@@ -41,8 +41,19 @@ python bin/launch_ST_abinitio_seq.py  -seq NLYIQWLKDGGPSSGRPPPS\
     -n TrpCage -dir tmp_TrpCage
 ```
 
-This command will perform a ST simulation of the TrpCage protein with the sequence `NLYIQWLKDGGPSSGRPPPS`. For *ab initio* simulations, an linear structure of the peptide is created and equilibrated in implicit solvent for 10ns, the system is then solvated and equilibrated in explicit solvent for 10 ns. A 1000 ns ST simulation will then be launched. 
-ST will used temperatures distributed exponentially between 280 K to 600 K, with a temperature time change interval of 4 ps. The results will be saved in the `tmp_TrpCage` directory.
+This command will perform a ST simulation of the TrpCage protein with the sequence `NLYIQWLKDGGPSSGRPPPS` and the following options:
+
+* A linear structure of the peptide is created.
+* A box padding of 1.5 nm is used (Default value).
+* Hydrogen mass repartition of 3.0 a.m.u. is used (Default value).
+* Langevin Integrator friction coefficient of {math}`1.0 \; ps^{-1}` (Default value).
+* equilibration in implicit solvent for 10ns (Default value).
+* equilibration in explicit solvent for 10ns (Default value).
+* Temperatures distributed exponentially between 280 K to 600 K.
+* Temperature time change interval of 4 ps.
+* ST log save time interval of 2 ps (Default value).
+* The results will be saved in the `tmp_TrpCage` directory.
+
 
 * Here is an example to launch a ST simulation of a protein from a given pdb:
 
