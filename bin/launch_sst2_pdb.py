@@ -117,6 +117,17 @@ def parser_input():
                         dest="solute_chain",
                         help='Solute chain ID, default=A',
                         default='A')
+    parser.add_argument('-ff',
+                        action="store",
+                        dest="ff",
+                        help='force field, default=amber14',
+                        default='amber14sb')
+    parser.add_argument('-water_ff',
+                        action="store",
+                        dest="water_ff",
+                        help='force field, default=tip3p',
+                        default='tip3p')
+
     return parser
 
 if __name__ == "__main__":
@@ -139,9 +150,7 @@ if __name__ == "__main__":
     # should be usabble soon:
     #forcefield_files = ['amber14-all.xml', 'amber14/tip3pfb.xml', 'implicit/obc2.xml']
 
-
-    forcefield_files = ['amber14/protein.ff14SB.xml', 'amber14/tip3p.xml']
-    forcefield = ForceField(*forcefield_files)
+    forcefield = tools.get_forcefield(args.ff, args.water_ff)
 
     tools.create_water_box(f"{OUT_PATH}/{name}_fixed.cif",
                      f"{OUT_PATH}/{name}_water.cif",

@@ -17,8 +17,102 @@ import pdbfixer
 # Logging
 logger = logging.getLogger(__name__)
 
+def get_forcefield(forcefield_name, water_model):
+    """Create the forcefield object from the forcefield name.
 
-def create_linear_peptide(seq, out_pdb):
+    Parameters
+    ----------
+    forcefield_name : str
+        Name of the forcefield
+    water_model : str
+        Name of the water forcefield
+
+    Returns
+    -------
+    forcefield : openmm ForceField
+        Forcefield object
+    """
+
+    forcefield_name = forcefield_name.lower().strip()
+
+    forcefield_files = []
+
+    if forcefield_name == 'amber14sb':
+
+        forcefield_files.append('amber14/protein.ff14SB.xml')
+
+        if water_model == 'tip3p':
+            forcefield_files.append('amber14/tip3p.xml')
+        elif water_model == 'tip3pfb':
+            forcefield_files.append('amber14/tip3pfb.xml')
+        elif water_model == 'tip4pew':
+            forcefield_files.append('amber14/tip4pew.xml')
+        elif water_model == 'tip4pfb':
+            forcefield_files.append('amber14/tip4pfb.xml')
+        elif water_model == 'spce':
+            forcefield_files.append('amber14/spce.xml')
+        elif water_model == 'opc':
+            forcefield_files.append('amber14/opc.xml')
+        else:
+            raise ValueError(f"Water Forcefield {water_model} not recognized with {forcefield_name}")
+        
+        return(app.ForceField(*forcefield_files))
+
+    elif forcefield_name in ['amber99sbildn', 'amber99sbnmr']:
+
+        if forcefield_name == 'amber99sbildn':
+            forcefield_files.append('amber99sbildn.xml')
+        if forcefield_name == 'amber99sbnmr':
+            forcefield_files.append('amber99sbnm.xml')
+
+        if water_model == 'tip3p':
+            forcefield_files.append('tip3p.xml')
+        elif water_model == 'tip3pfb':
+            forcefield_files.append('tip3pfb.xml')
+        elif water_model == 'tip4pew':
+            forcefield_files.append('tip4pew.xml')
+        elif water_model == 'tip4pfb':
+            forcefield_files.append('tip4pfb.xml')
+        elif water_model == 'spce':
+            forcefield_files.append('spce.xml')
+        elif water_model == 'opc':
+            forcefield_files.append('opc.xml')
+        else:
+            raise ValueError(f"Water Forcefield {water_model} not recognized with {forcefield_name}")
+        
+        return(app.ForceField(*forcefield_files))
+
+
+    elif forcefield_name == 'charmm36':
+
+        forcefield_files.append('charmm36.xml')
+
+        if water_model == 'tip3':
+            forcefield_files.append('charmm36/water.xml')
+        elif water_model == 'spce':
+            forcefield_files.append('charmm36/spce.xml')
+        elif water_model == 'tip3p-pme-b':
+            forcefield_files.append('charmm36/tip3p-pme-b.xml')
+        elif water_model == 'tip3p-pme-f':
+            forcefield_files.append('charmm36/tip3p-pme-f.xml')
+        elif water_model == 'tip4p2005':
+            forcefield_files.append('charmm36/tip4p2005.xml')
+        elif water_model == 'tip4pew':
+            forcefield_files.append('charmm36/tip4pew.xml')
+        elif water_model == 'tip5p':
+            forcefield_files.append('charmm36/tip5p.xml')
+        elif water_model == 'tip5pew':
+            forcefield_files.append('charmm36/tip5pew.xml')
+        else:
+            raise ValueError(f"Water Forcefield {water_model} not recognized with {forcefield_name}")
+        
+        return(app.ForceField(*forcefield_files))
+    
+    else:
+        raise ValueError(f"Forcefield {forcefield_name} not recognized")
+
+
+def create_linear_peptide(seq, out_pdb, n_term=None, c_term=None):
     """Creates a linear peptide and save it in
     `out_pdb` file.
 
@@ -28,6 +122,10 @@ def create_linear_peptide(seq, out_pdb):
         Sequence of the peptide
     out_pdb : str
         Path to the output pdb file
+    n_term : str
+        N-terminal residue, default is None
+    c_term : str
+        C-terminal residue, default is None
 
     Returns
     -------
@@ -37,7 +135,7 @@ def create_linear_peptide(seq, out_pdb):
     from pdb_numpy import abinitio
 
     # Create linear peptide:
-    pep_coor = abinitio.make_peptide(seq)
+    pep_coor = abinitio.make_peptide(seq, n_term=n_term, c_term=c_term)
     pep_coor.write(out_pdb)
 
 

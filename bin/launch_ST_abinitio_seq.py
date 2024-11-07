@@ -104,6 +104,25 @@ def parser_input():
                         help='Langevin Integrator friction coefficient default=10.0 (ps-1)',
                         type=float,
                         default=10.0)
+    parser.add_argument('-ff',
+                        action="store",
+                        dest="ff",
+                        help='force field, default=amber14',
+                        default='amber14sb')
+    parser.add_argument('-water_ff',
+                        action="store",
+                        dest="water_ff",
+                        help='force field, default=tip3p',
+                        default='tip3p')
+    parser.add_argument('-ace',
+                        action='store_true',
+                        dest="ace",
+                        help='Add ACE cap to N-term')
+    parser.add_argument('-nme',
+                        action='store_true',
+                        dest="nme",
+                        help='Add NME cap to C-term')
+
     return parser
 
 if __name__ == "__main__":
@@ -118,7 +137,21 @@ if __name__ == "__main__":
     if not os.path.exists(OUT_PATH):
         os.makedirs(OUT_PATH)
 
-    tools.create_linear_peptide(args.seq, f"{OUT_PATH}/{name}_linear.pdb")
+    if args.ace:
+        n_term = "ACE"
+    else:
+        n_term = None
+    
+    if args.nme:
+        c_term = "NME"
+    else:
+        c_term = None
+
+    tools.create_linear_peptide(
+        args.seq,
+        f"{OUT_PATH}/{name}_linear.pdb",
+        n_term=n_term, c_term=c_term)
+
     tools.prepare_pdb(f"{OUT_PATH}/{name}_linear.pdb",
                 f"{OUT_PATH}/{name}_fixed.cif",
                 pH=7.0,
@@ -126,9 +159,15 @@ if __name__ == "__main__":
 
     # should be usabble soon:
     #forcefield_files = ['amber14-all.xml', 'amber14/tip3pfb.xml', 'implicit/obc2.xml']
-    forcefield_files = ['amber99sbnmr.xml', 'amber99_obc.xml']
-    impl_forcefield = ForceField(*forcefield_files)
-
+    if args.ff.startswith('amber'):
+        forcefield_files = ['amber99sbnmr.xml', 'amber99_obc.xml']
+        impl_forcefield = ForceField(*forcefield_files)
+    elif args.ff == "charmm36":
+        forcefield_files = ['charmm36.xml', 'implicit/obc1.xml']
+        impl_forcefield = ForceField(*forcefield_files)
+    else:
+        raise ValueError(f"Force field {args.ff} not recognized")
+    
     logger.info(f"- Run implicit simulation")
 
     tools.implicit_sim(f"{OUT_PATH}/{name}_fixed.cif",
@@ -138,8 +177,9 @@ if __name__ == "__main__":
                  temp = args.min_temp,)
 
 
-    forcefield_files = ['amber14/protein.ff14SB.xml', 'amber14/tip3p.xml']
-    forcefield = ForceField(*forcefield_files)
+    #forcefield_files = ['amber14/protein.ff14SB.xml', 'amber14/tip3p.xml']
+    #forcefield = ForceField(*forcefield_files)
+    forcefield = tools.get_forcefield(args.ff, args.water_ff)
 
     tools.create_water_box(f"{OUT_PATH}/{name}_implicit_equi.cif",
                      f"{OUT_PATH}/{name}_water.cif",
