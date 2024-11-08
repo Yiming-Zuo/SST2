@@ -13,6 +13,8 @@ import pdbfixer
 from openmm.app import PDBFile, PDBxFile, ForceField
 from openmm import LangevinMiddleIntegrator, unit
 
+import pdb_numpy
+
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../src/')))
 
 from SST2.rest2 import REST2, run_rest2
@@ -112,11 +114,11 @@ def parser_input():
                         action="store_true",
                         dest="exclude_Pro_omega",
                         help='Exclude Proline omega dihedral scale angles')
-    parser.add_argument('-chain',
+    parser.add_argument('-select',
                         action="store",
-                        dest="solute_chain",
-                        help='Solute chain ID, default=A',
-                        default='A')
+                        dest="solute_sel",
+                        help='Solute selection, default=\"chain A\"',
+                        default='chain A')
     parser.add_argument('-ff',
                         action="store",
                         dest="ff",
@@ -177,9 +179,11 @@ if __name__ == "__main__":
         open(f"{OUT_PATH}/{name}_water.pdb", "w"),
         True)
 
-    # Get indices of the three sets of atoms.
-    all_indices = [int(i.index) for i in cif.topology.atoms()]
-    solute_indices = [int(i.index) for i in cif.topology.atoms() if i.residue.chain.id in [args.solute_chain]]
+    # Get selection indices
+    coor_init = pdb_numpy.Coor(f"{OUT_PATH}/{name}_water.pdb")
+    solute_indices = coor_init.get_index_select(args.solute_sel)
+    assert len(solute_indices) > 0, "No solute atoms selected"
+    logger.info(f"- Select {len(solute_indices)} solute atoms")
 
     integrator = LangevinMiddleIntegrator(temperature, friction, dt)
 
