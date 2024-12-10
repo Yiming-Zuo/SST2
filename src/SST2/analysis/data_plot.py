@@ -1046,10 +1046,13 @@ def plot_folding_fraction(df, col="RMSD (nm)", cutoff=0.18, label=None,
     return compute_Tm(temp_list, fold_frac)
 
 
-def compute_folding_fraction(df, col="RMSD (nm)", cutoff=0.18):
+def compute_folding_fraction(df, col="RMSD (nm)", cutoff=0.18, temp_list=None):
 
-    temp_list = df['Aim Temp (K)'].unique()
-    temp_list.sort()
+    if temp_list is None:
+        temp_list = df['Aim Temp (K)'].unique()
+        temp_list.sort()
+    else:
+        temp_list.sort()
     fold_frac = []
 
     for temp in temp_list:
@@ -1059,7 +1062,10 @@ def compute_folding_fraction(df, col="RMSD (nm)", cutoff=0.18):
         num_frame = len(local_df)
         num_cutoff = sum(local_df[col] < cutoff)
         
-        fold_frac.append(num_cutoff/num_frame)
+        if num_frame == 0:
+            fold_frac.append(0)
+        else:
+            fold_frac.append(num_cutoff/num_frame)
 
 
     
@@ -1120,7 +1126,7 @@ def compute_folding_fraction_RMSD(df, col="RMSD (nm)", cutoff=0.18,
         fold_frac = []
 
         fold_frac = compute_folding_fraction(
-            df_time, col, cutoff)
+            df_time, col, cutoff, temp_list)
         
         fold_frac = np.array(fold_frac)
         
@@ -1219,7 +1225,7 @@ def plot_rung_occupancy(df, hue='group'):
 
 
 def count_rmsd_transition(df,
-    rmsd_fold=0.2, rmsd_unfold=0.4, dt=0.002,
+    rmsd_fold=0.2, rmsd_unfold=0.4, dt=None,
     rmsd_col='RMSD (nm)', time_ax_name=r"$Time\;(\mu s)$"):
 
     sim_list = df.sim.unique()
@@ -1239,20 +1245,21 @@ def count_rmsd_transition(df,
             if (rmsd > rmsd_unfold) and fold_state:
                 trans_num += 1
                 fold_state = False
+        if dt is None:
+            dt_sim = sim_df[time_ax_name].iloc[1] - sim_df[time_ax_name].iloc[0]
+            dt_steps = dt_sim * 1e6
+        else:
+            dt_sim = dt
+            step_gap = sim_df["Step"].iloc[1] - sim_df["Step"].iloc[0]
+            dt_steps = step_gap * dt_sim
 
-        #dt = min(sim_df[time_ax_name].iloc[1:].values - sim_df[time_ax_name].iloc[:-1].values)
-        step_gap = sim_df["Step"].iloc[1] - sim_df["Step"].iloc[0]
-        dt_steps = step_gap * dt
         max_time = len(sim_df) * dt_steps / 1e6
-        old_max_time = sim_df[time_ax_name].iloc[-1]
-        logger.info(max_time, sim_df[time_ax_name].iloc[-1])
-
-        #max_time = sim_df[time_ax_name].iloc[-1]
+        logger.info(f"Computed max time: {max_time:.3f}, df max time: {sim_df[time_ax_name].iloc[-1]:.3f}")
 
         trans_freq = trans_num / max_time
         trans_list.append(trans_freq)
 
-        logger.info(f'sim: {sim:20}  trans num={trans_num:6}  clust_freq = {trans_freq:.2f}/us, {max_time:.2f} {step_gap:.2f} {len(sim_df):.2f} ')
+        logger.info(f'sim: {sim:20}  trans num={trans_num:6}  clust_freq = {trans_freq:.2f}/us, {max_time:.2f} {len(sim_df):.2f} ')
 
     df_trans = pd.DataFrame({'sim': sim_list, 'trans': trans_list})
     return df_trans
