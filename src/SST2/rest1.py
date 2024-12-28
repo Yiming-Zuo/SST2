@@ -246,6 +246,10 @@ class REST1:
 
         # Extract solvent nonbonded index and values
         self.find_solvent_nb_index()
+        # Separate Harmonic bond force from the solute
+        self.separate_harmonic_bond_pot()
+        # Separate Harmonic angle force from the solute
+        self.separate_harmonic_angle_pot()
         # Separate solvent torsion from the solute
         self.separate_torsion_pot()
         # Create separate solute and solvent simulation
@@ -313,6 +317,203 @@ class REST1:
                     [iatom, jatom, chargeprod, sigma, epsilon]
                 )
 
+
+    def separate_harmonic_bond_pot(self):
+        """Use in the REST1 case as it avoid to modify
+        twice the torsion terms in the rest1 system and
+        in the solute system.
+
+        Harmonic bond potential is separate in two groups:
+        - the solute (not scaled one)
+        - the solvent (scaled one)
+
+        The original harmonic bond potential is deleted.
+
+
+        Returns
+        -------
+        None
+        """
+
+        energy_expression = "0.5*k*(r-r_0)^2;"
+
+        #    r_0 = 10.5 * unit.nanometers
+        #    k = 1000 * unit.kilojoules_per_mole / unit.nanometers ** 2
+        #    bond_restraint.addBond(1, 100, [k, r_0])
+        #    system.addForce(bond_restraint)
+
+        # Create the Solvent bond and not scaled solute torsion
+        solvent_harmonic_bond_force = openmm.CustomBondForce(energy_expression)
+        solvent_harmonic_bond_force.addPerBondParameter("r_0")
+        solvent_harmonic_bond_force.addPerBondParameter("k")
+
+        # Create the Solute bond
+        solute_harmonic_bond_force = openmm.CustomBondForce(energy_expression)
+        solute_harmonic_bond_force.addPerBondParameter("r_0")
+        solute_harmonic_bond_force.addPerBondParameter("k")
+
+        original_harmonic_bond_force = self.system_forces["HarmonicBondForce"]
+
+        #bond_idxs = [sorted([i.index, j.index]) for i, j in self.topology.bonds()]
+
+        # Store the original torsion parameters
+        harmonic_bond_index = 0
+        self.init_harmonic_bond_index = []
+        self.init_harmonic_bond_value = []
+
+
+        for i in range(original_harmonic_bond_force.getNumBonds()):
+            (
+                p1,
+                p2,
+                r_0,
+                k,
+            ) = original_harmonic_bond_force.getBondParameters(i)
+
+            #print(p1, p2, r_0, k)
+            #not_improper = (
+            #    sorted([p1, p2]) in bond_idxs
+            #    and sorted([p2, p3]) in bond_idxs
+            #    and sorted([p3, p4]) in bond_idxs
+            #)
+
+            solute_in = (
+                p1 in self.solute_index
+                and p2 in self.solute_index
+            )
+
+            solvent_in = (
+                p1 in self.solvent_index
+                and p2 in self.solvent_index
+            )
+
+
+            if solvent_in:
+                solvent_harmonic_bond_force.addBond(
+                    p1, p2, [r_0, k]
+                )
+                self.init_harmonic_bond_index.append(harmonic_bond_index)
+                self.init_harmonic_bond_value.append([p1, p2, r_0, k])
+                harmonic_bond_index += 1
+            elif solute_in:
+                solute_harmonic_bond_force.addBond(
+                    p1, p2, [r_0, k]
+                )
+            else:
+                raise ValueError("Harmonic Bond not in solute or solvent")
+
+        self.harmonic_bond_force = solvent_harmonic_bond_force
+
+        logger.info("- Add new Harmonic Bond Forces")
+        self.system.addForce(solute_harmonic_bond_force)
+        self.system.addForce(solvent_harmonic_bond_force)
+
+        logger.info("- Delete original Harmonic Bond Forces")
+
+        for count, force in enumerate(self.system.getForces()):
+            if isinstance(force, openmm.HarmonicBondForce):
+                self.system.removeForce(count)
+
+
+    def separate_harmonic_angle_pot(self):
+        """Use in the REST1 case as it avoid to modify
+        twice the torsion terms in the rest1 system and
+        in the solute system.
+
+        Harmonic bond potential is separate in two groups:
+        - the solute (not scaled one)
+        - the solvent (scaled one)
+
+        The original harmonic bond potential is deleted.
+
+
+        Returns
+        -------
+        None
+        """
+
+        energy_expression = "0.5*k*(theta-theta_0)^2;"
+
+        #    r_0 = 10.5 * unit.nanometers
+        #    k = 1000 * unit.kilojoules_per_mole / unit.nanometers ** 2
+        #    bond_restraint.addBond(1, 100, [k, r_0])
+        #    system.addForce(bond_restraint)
+
+        # Create the Solvent bond and not scaled solute torsion
+        solvent_harmonic_angle_force = openmm.CustomAngleForce(energy_expression)
+        solvent_harmonic_angle_force.addPerAngleParameter("theta_0")
+        solvent_harmonic_angle_force.addPerAngleParameter("k")
+
+        # Create the Solute bond
+        solute_harmonic_angle_force = openmm.CustomAngleForce(energy_expression)
+        solute_harmonic_angle_force.addPerAngleParameter("theta_0")
+        solute_harmonic_angle_force.addPerAngleParameter("k")
+
+        original_harmonic_angle_force = self.system_forces["HarmonicAngleForce"]
+
+        #bond_idxs = [sorted([i.index, j.index]) for i, j in self.topology.bonds()]
+
+        # Store the original torsion parameters
+        harmonic_angle_index = 0
+        self.init_harmonic_angle_index = []
+        self.init_harmonic_angle_value = []
+
+
+        for i in range(original_harmonic_angle_force.getNumAngles()):
+            (
+                p1,
+                p2,
+                p3,
+                theta_0,
+                k,
+            ) = original_harmonic_angle_force.getAngleParameters(i)
+
+            # print(p1, p2, p3, theta_0, k)
+            #not_improper = (
+            #    sorted([p1, p2]) in bond_idxs
+            #    and sorted([p2, p3]) in bond_idxs
+            #    and sorted([p3, p4]) in bond_idxs
+            #)
+
+            solute_in = (
+                p1 in self.solute_index
+                and p2 in self.solute_index
+                and p3 in self.solute_index
+            )
+
+            solvent_in = (
+                p1 in self.solvent_index
+                and p2 in self.solvent_index
+                and p3 in self.solvent_index
+            )
+
+
+            if solvent_in:
+                solvent_harmonic_angle_force.addAngle(
+                    p1, p2, p3, [theta_0, k]
+                )
+                self.init_harmonic_angle_index.append(harmonic_angle_index)
+                self.init_harmonic_angle_value.append([p1, p2, p3, theta_0, k])
+                harmonic_angle_index += 1
+            elif solute_in:
+                solute_harmonic_angle_force.addAngle(
+                    p1, p2, p3, [theta_0, k]
+                )
+            else:
+                raise ValueError("Harmonic Bond not in solute or solvent")
+
+        self.harmonic_angle_force = solvent_harmonic_angle_force
+
+        logger.info("- Add new Harmonic Bond Forces")
+        self.system.addForce(solute_harmonic_angle_force)
+        self.system.addForce(solvent_harmonic_angle_force)
+
+        logger.info("- Delete original Harmonic Bond Forces")
+
+        for count, force in enumerate(self.system.getForces()):
+            if isinstance(force, openmm.HarmonicAngleForce):
+                self.system.removeForce(count)
+
     def separate_torsion_pot(self):
         """Use in the REST1 case as it avoid to modify
         twice the torsion terms in the rest1 system and
@@ -329,11 +530,6 @@ class REST1:
         https://github.com/maccallumlab/meld/blob/master/meld/runner/transform/rest2.py
 
         The original torsion potential is deleted.
-
-        Parameters
-        ----------
-        exclude_Pro_omegas : bool
-            The exclusion of the proline omegas scaling, default is False
 
         Returns
         -------
@@ -416,7 +612,7 @@ class REST1:
             else:
                 raise ValueError("Torsion not in solute or solvent")
 
-        self.solute_torsion_force = solute_torsion_force
+        self.solvent_torsion_force = solvent_torsion_force
 
         logger.info("- Add new Torsion Forces")
         self.system.addForce(solute_torsion_force)
@@ -681,7 +877,7 @@ class REST1:
         - charge product is scaled by `scale`
         """
 
-        nonbonded_force = self.system_forces_solute["NonbondedForce"]
+        nonbonded_force = self.system_forces_solvent["NonbondedForce"]
 
         # assert len(self.init_nb_param) == nonbonded_force.getNumParticles()
 
@@ -729,8 +925,43 @@ class REST1:
         # Need to fix simulation
         nonbonded_force.updateParametersInContext(self.simulation_solvent.context)
 
+    def update_harmonic_bond(self, scale):
+        """Scale solvent only system nonbonded interaction:
+        - LJ epsilon by `scale`
+        - Coulomb charges by `sqrt(scale)`
+        - charge product is scaled by `scale`
+        """
+
+        harmonic_bond_force = self.harmonic_bond_force
+
+        for i, index in enumerate(self.init_harmonic_bond_index):
+            p1, p2, r_0, k = self.init_harmonic_bond_value[i]
+            harmonic_bond_force.setBondParameters(
+                index, p1, p2, [r_0, k * scale]
+            )
+
+        harmonic_bond_force.updateParametersInContext(self.simulation.context)
+
+
+    def update_harmonic_angle(self, scale):
+        """Scale solvent only system nonbonded interaction:
+        - LJ epsilon by `scale`
+        - Coulomb charges by `sqrt(scale)`
+        - charge product is scaled by `scale`
+        """
+
+        harmonic_angle_force = self.harmonic_angle_force
+
+        for i, index in enumerate(self.init_harmonic_angle_index):
+            p1, p2, p3, theta_0, k = self.init_harmonic_angle_value[i]
+            harmonic_angle_force.setAngleParameters(
+                index, p1, p2, p3, [theta_0, k * scale]
+            )
+
+        harmonic_angle_force.updateParametersInContext(self.simulation.context)
+
     def scale_nonbonded_torsion(self, scale):
-        """Scale solute nonbonded potential and
+        """Scale solvent nonbonded potential and
         solute torsion potential
         """
 
@@ -738,6 +969,8 @@ class REST1:
         self.update_nonbonded(scale)
         self.update_nonbonded_solvent(scale)
         self.update_torsions(scale)
+        self.update_harmonic_bond(scale)
+        self.update_harmonic_angle(scale)
 
     def compute_all_energies(self):
         """Extract solute potential energy and solute-solvent interactions."""
@@ -1116,7 +1349,7 @@ if __name__ == "__main__":
         f"NonbondedForce       {forces_rest1[1]['energy']/forces_sys[1]['energy']:.5e}"
     )
     print(
-        f"Total                {forces_rest1[9]['energy']/forces_sys[6]['energy']:.5e}"
+        f"Total                {forces_rest1[10]['energy']/forces_sys[6]['energy']:.5e}"
     )
 
     print("\nCompare torsion energy rest1 vs. pep:\n")
