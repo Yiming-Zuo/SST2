@@ -14,7 +14,7 @@ import openmm
 from openmm import unit
 import openmm.app as app
 
-from tools import setup_simulation, create_system_simulation, get_forces, simulate
+from .tools import setup_simulation, create_system_simulation, get_forces, simulate
 
 # Logging
 logger = logging.getLogger(__name__)
@@ -43,7 +43,7 @@ class Rest1Reporter(object):
     def __init__(self, file, reportInterval, rest1):
         self._out = open(file, "w", buffering=1)
         self._out.write(
-            "Step,Lambda,Solute scaled(kJ/mol),Solute not scaled(kJ/mol),Solvent(kJ/mol),Solute-Solvent(kJ/mol)\n"
+            "Step,Lambda,Solute(kJ/mol),Solvent(kJ/mol),Solute-Solvent(kJ/mol)\n"
         )
         self._reportInterval = reportInterval
         self._rest1 = rest1
@@ -58,9 +58,8 @@ class Rest1Reporter(object):
     def report(self, simulation, state):
         """Generate a report.
         Compute the energies of:
-        - the solute scaled
-        - the solute not scaled
-        - the solvent
+        - the solute
+        - the solvent scaled
         - the solute-solvent
 
         Then write them to the file (`self._out`).
@@ -78,15 +77,14 @@ class Rest1Reporter(object):
 
         energies = self._rest1.compute_all_energies()
 
-        # E_solute_scaled, E_solute_not_scaled, E_solvent, solvent_solute_nb
+        # E_solute, E_solvent, solvent_solute_nb
 
         step = state.getStepCount()
         self._out.write(
             f"{step},{self._rest1.scale:.3f},"
             f"{energies[0].value_in_unit(unit.kilojoule_per_mole):.2f},"
             f"{energies[1].value_in_unit(unit.kilojoule_per_mole):.2f},"
-            f"{energies[2].value_in_unit(unit.kilojoule_per_mole):.2f},"
-            f"{energies[3].value_in_unit(unit.kilojoule_per_mole):.2f}\n"
+            f"{energies[2].value_in_unit(unit.kilojoule_per_mole):.2f}\n"
         )
 
 
@@ -960,7 +958,7 @@ class REST1:
 
         harmonic_angle_force.updateParametersInContext(self.simulation.context)
 
-    def scale_nonbonded_torsion(self, scale):
+    def scale_nonbonded_bonded(self, scale):
         """Scale solvent nonbonded potential and
         solute torsion potential
         """
@@ -975,57 +973,58 @@ class REST1:
     def compute_all_energies(self):
         """Extract solute potential energy and solute-solvent interactions."""
 
+
+        # Extract non bonded forces
         solute_force, solvent_force = self.compute_solute_solvent_system_energy()
 
-        E_solute_not_scaled = 0 * unit.kilojoules_per_mole
-        E_solute_scaled = 0 * unit.kilojoules_per_mole
-        solute_not_scaled_term = ["HarmonicBondForce", "HarmonicAngleForce"]
+        E_solvent = 0 * unit.kilojoules_per_mole
+        E_solute = 0 * unit.kilojoules_per_mole
 
         for i, force in solute_force.items():
             if force["name"] == "NonbondedForce":
                 solute_nb = force["energy"]
-                E_solute_scaled += force["energy"]
-            elif force["name"] in solute_not_scaled_term:
-                E_solute_not_scaled += force["energy"]
+                E_solute += force["energy"]
 
-        solvent_term = [
-            "HarmonicBondForce",
-            "HarmonicAngleForce",
-            "NonbondedForce",
-            "PeriodicTorsionForce",
-        ]
-        E_solvent = 0 * unit.kilojoules_per_mole
+
         for i, force in solvent_force.items():
             if force["name"] == "NonbondedForce":
                 solvent_nb = force["energy"]
-            if force["name"] in solvent_term:
                 E_solvent += force["energy"]
+
+        # Extract bonded forces
 
         system_force = get_forces(self.system, self.simulation)
 
-        solute_torsion_scaled_flag = True
-        solute_torsion_not_scaled_flag = False
-        system_term = [
-            "HarmonicBondForce",
-            "HarmonicAngleForce",
-            "PeriodicTorsionForce",
-            "CustomTorsionForce",
-        ]
+        solvent_bond_flag = False
+        solvent_angle_flag = False
+        solvent_torsion_flag = False 
+
 
         for i, force in system_force.items():
             if force["name"] == "NonbondedForce":
                 all_nb = force["energy"]
-            # Torsion flag to get first component of dihedral
+            # flag to get first component of
             # forces (the solute one)
-            elif force["name"] == "CustomTorsionForce" and solute_torsion_scaled_flag:
-                E_solute_scaled += force["energy"]
-                solute_torsion_scaled_flag = False
-                solute_torsion_not_scaled_flag = True
-            elif (
-                force["name"] == "CustomTorsionForce" and solute_torsion_not_scaled_flag
-            ):
-                E_solute_not_scaled += force["energy"]
-                solute_torsion_not_scaled_flag = False
+            elif force["name"] == "CustomBondForce":
+                if not solvent_bond_flag:
+                    E_solute += force["energy"]
+                    solvent_bond_flag = True
+                else:
+                    E_solvent += force["energy"]
+            elif force["name"] == "CustomAngleForce":
+                if not solvent_angle_flag:
+                    E_solute += force["energy"]
+                    solvent_angle_flag = True
+                else:
+                    E_solvent += force["energy"]
+            elif force["name"] == "CustomTorsionForce":
+                if not solvent_torsion_flag:
+                    E_solute += force["energy"]
+                    solvent_torsion_flag = True
+                else:
+                    E_solvent += force["energy"]
+
+
 
         # Non scaled solvent-solute_non bonded:
         solvent_solute_nb = all_nb - solute_nb - solvent_nb
@@ -1034,9 +1033,8 @@ class REST1:
         # solute_nb *= 1 / self.scale
 
         return (
-            (1 / self.scale) * E_solute_scaled,
-            E_solute_not_scaled,
-            E_solvent,
+            E_solute,
+            (1 / self.scale) * E_solvent,
             (1 / self.scale) ** 0.5 * solvent_solute_nb,
         )
 
@@ -1255,81 +1253,82 @@ if __name__ == "__main__":
 
     test = REST1(system, pdb, forcefield, solute_indices, integrator_rest)
 
+    ####################
+    # ## REST1 test ####
+    ####################
+
     print("REST1 forces 300K:")
     tools.print_forces(test.system, test.simulation)
     forces_rest1 = tools.get_forces(test.system, test.simulation)
 
-    (
-        E_solute_scaled,
-        E_solute_not_scaled,
-        E_solvent,
-        solvent_solute_nb,
-    ) = test.compute_all_energies()
-    print(f"E_solute_scaled      {E_solute_scaled}")
-    print(f"E_solute_not_scaled  {E_solute_not_scaled}")
-    print(f"E_solvent            {E_solvent}")
-    print(f"solvent_solute_nb    {solvent_solute_nb}")
+    print("\nCompare energy rest1 vs. classic:\n")
+    E_rest1_bond = forces_rest1[2]['energy'] + forces_rest1[3]['energy']
+    print(
+        f"HarmonicBondForce    {E_rest1_bond/forces_sys[0]['energy']:.5e}"
+    )
+    E_rest1_angle = forces_rest1[4]['energy'] + forces_rest1[5]['energy']
+    print(
+        f"HarmonicAngleForce   {E_rest1_angle/forces_sys[4]['energy']:.5e}"
+    )
 
-    print("\nCompare not scaled energy rest1 vs. classic:\n")
-    print(
-        f"HarmonicBondForce    {forces_rest1[0]['energy']/forces_sys[0]['energy']:.5e}"
-    )
-    print(
-        f"HarmonicAngleForce   {forces_rest1[3]['energy']/forces_sys[4]['energy']:.5e}"
-    )
-    print("Compare scaled energy:")
     torsion_force = (
-        forces_rest1[4]["energy"]
-        + forces_rest1[5]["energy"]
-        + forces_rest1[6]["energy"]
+        forces_rest1[6]["energy"]
+        + forces_rest1[7]["energy"]
     )
 
     print(f"PeriodicTorsionForce {torsion_force/forces_sys[2]['energy']:.5e}")
     print(
-        f"NonbondedForce       {forces_rest1[1]['energy']/forces_sys[1]['energy']:.5e}"
+        f"NonbondedForce       {forces_rest1[0]['energy']/forces_sys[1]['energy']:.5e}"
     )
     print(
-        f"Total                {forces_rest1[8]['energy']/forces_sys[6]['energy']:.5e}"
+        f"Total                {forces_rest1[10]['energy']/forces_sys[6]['energy']:.5e}"
     )
 
-    print("\nCompare torsion energy rest1 vs. pep:\n")
-    torsion_force = forces_rest1[4]["energy"] + forces_rest1[5]["energy"]
-    print(f"PeriodicTorsionForce {torsion_force/forces_pep[2]['energy']:.5e}")
+    (
+        E_solute,
+        E_solvent,
+        solvent_solute_nb,
+    ) = test.compute_all_energies()
 
-    print("\nCompare torsion energy rest1 vs. no pep:\n")
+    print(f"E_solute             {E_solute}")
+    print(f"E_solvent            {E_solvent}")
+    print(f"solvent_solute_nb    {solvent_solute_nb}")
+
+    total_ener = E_solute + E_solvent + solvent_solute_nb
+
+    print(
+        f"Total Computed       {total_ener/forces_sys[6]['energy']:.5e}"
+    )
+
+
+    print("\nCompare Solute:\n")
+    torsion_force = forces_rest1[4]["energy"] + forces_rest1[5]["energy"]
+    print(f"Total {E_solute/forces_pep[6]['energy']:.5e}")
+
+    print("\nCompare Solvent:\n")
     torsion_force = forces_rest1[6]["energy"]
-    print(f"PeriodicTorsionForce {torsion_force/forces_no_pep[2]['energy']:.5e}")
+    print(f"Total {E_solvent/forces_no_pep[6]['energy']:.5e}")
 
     print("\nCompare nonbond energy rest1 vs. no pep+pep+solvent_solute_nb:\n")
     non_bonded = (
-        solvent_solute_nb + forces_pep[2]["energy"] + forces_no_pep[2]["energy"]
+        solvent_solute_nb + forces_pep[1]["energy"] + forces_no_pep[1]["energy"]
     )
-    print(f"NonbondedForce       {non_bonded/forces_sys[2]['energy']:.5e}")
+    print(f"NonbondedForce       {non_bonded/forces_sys[1]['energy']:.5e}")
 
-    solute_scaled_force = forces_rest1[4]["energy"] + forces_pep[2]["energy"]
-    print(f"E_solute_scaled      {solute_scaled_force/E_solute_scaled:.5e}")
-    solute_not_scaled_force = (
-        forces_rest1[5]["energy"] + forces_pep[0]["energy"] + +forces_pep[1]["energy"]
-    )
-    print(f"E_solute_not_scaled  {non_bonded/forces_sys[2]['energy']:.5e}")
-
-    print(f"E_solvent            {E_solvent/forces_no_pep[6]['energy']:.5e}")
 
     scale = 0.5
-    test.scale_nonbonded_torsion(scale)
+    test.scale_nonbonded_bonded(scale)
     print("REST1 forces 600K:")
     tools.print_forces(test.system, test.simulation)
     forces_rest1 = tools.get_forces(test.system, test.simulation)
     (
-        E_solute_scaled,
-        E_solute_not_scaled,
-        E_solvent,
-        solvent_solute_nb,
+        E_solute_new,
+        E_solvent_new,
+        solvent_solute_nb_new,
     ) = test.compute_all_energies()
-    print(f"E_solute_scaled      {E_solute_scaled}")
-    print(f"E_solute_not_scaled  {E_solute_not_scaled}")
-    print(f"E_solvent            {E_solvent}")
-    print(f"solvent_solute_nb    {solvent_solute_nb}")
+    print(f"ratio new/old E_solute             {E_solute/E_solute_new}")
+    print(f"ratio new/old E_solvent            {E_solvent/E_solvent_new}")
+    print(f"ratio new/old solvent_solute_nb    {solvent_solute_nb/solvent_solute_nb_new}")
 
     print("\nCompare not scaled energy rest1 vs. classic:\n")
     print(

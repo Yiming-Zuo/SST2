@@ -729,12 +729,14 @@ def compute_ladder_num(generic_name, min_temp, max_temp, sst2_score=False):
     # Extract potential energy
     if sst2_score:
         logger.info("- Extract potential energy")
-        df_sim["Solute(kJ/mol)"] = (
-            df_sim["Solute scaled(kJ/mol)"] + df_sim["Solute not scaled(kJ/mol)"]
-        )
+        # SST1 case :
+        if "Solute not scaled(kJ/mol)" in df_sim.columns:
+            df_sim["Solute(kJ/mol)"] = (
+                df_sim["Solute scaled(kJ/mol)"] + df_sim["Solute not scaled(kJ/mol)"]
+            )
         df_sim["new_pot"] = (
             df_sim["Solute(kJ/mol)"]
-            + 0.5 * (min_temp / min_temp) ** 0.5 * df_sim["Solute-Solvent(kJ/mol)"]
+            + 0.5 * (max_temp / min_temp) ** 0.5 * df_sim["Solute-Solvent(kJ/mol)"]
         )
         E_pot = df_sim["new_pot"].mean()
     else:
