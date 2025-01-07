@@ -46,7 +46,8 @@ class SST1Reporter(object):
         return (steps, False, isUpdateAttempt, False, isUpdateAttempt)
 
     def report(self, simulation, state):
-        energie_group = self.sst1.rest1.compute_all_energies()
+        #energie_group = self.sst1.rest1.compute_all_energies()
+        ener_solut, ener_solv, ener_solut_solv  = self.sst1.rest1.compute_all_energies()
         # energie = st.rest1.get_customPotEnergie()
         # E = Bi*Epp + (B0Bi)**0.5 Epw
         # print(energie_group)
@@ -56,19 +57,18 @@ class SST1Reporter(object):
         # print('Energie', energie)
         self.sst1._e_num[self.sst1.currentTemperature] += 1
         self.sst1._e_solute_avg[self.sst1.currentTemperature] += (
-            energie_group[0] - self.sst1._e_solute_avg[self.sst1.currentTemperature]
+            ener_solut - self.sst1._e_solute_avg[self.sst1.currentTemperature]
         ) / self.sst1._e_num[self.sst1.currentTemperature]
         self.sst1._e_solute_solv_avg[self.sst1.currentTemperature] += (
-            energie_group[2]
-            - self.sst1._e_solute_solv_avg[self.sst1.currentTemperature]
+            ener_solut_solv - self.sst1._e_solute_solv_avg[self.sst1.currentTemperature]
         ) / self.sst1._e_num[self.sst1.currentTemperature]
         # print(energie_group[0], energie_group[3])
         # print([ener._value for ener in st._e_solute_avg])
         # print([ener._value for ener in st._e_solute_solv_avg])
         if simulation.currentStep % self.sst1.reportInterval == 0:
-            self.sst1._writeReport(energie_group)
+            self.sst1._writeReport([ener_solut, ener_solv, ener_solut_solv])
         if simulation.currentStep % self.sst1.tempChangeInterval == 0:
-            self.sst1._attemptTemperatureChange(state, energie_group[0], energie_group[2])
+            self.sst1._attemptTemperatureChange(state, ener_solut, ener_solut_solv)
 
 
 class SST1(object):
@@ -231,8 +231,8 @@ class SST1(object):
         # print(self.temperatures[self.currentTemperature])
         # self.simulation.integrator.setTemperature(self.temperatures[self.currentTemperature])
         self.rest1.scale_nonbonded_bonded(
+            self.temperatures[self.currentTemperature] /
             self.temperatures[self.temp_ref_index]
-            / self.temperatures[self.currentTemperature]
         )
 
         self.simulation.integrator.setTemperature(self.temperatures[self.currentTemperature])
@@ -441,8 +441,7 @@ class SST1(object):
                 self.currentTemperature = temp_list[i]
                 # self.simulation.integrator.setTemperature(self.temperatures[i])
                 self.rest1.scale_nonbonded_bonded(
-                    self.temperatures[self.temp_ref_index]
-                    / self.temperatures[temp_list[i]]
+                    self.temperatures[temp_list[i]] / self.temperatures[self.temp_ref_index]
                 )
 
                 scale = (

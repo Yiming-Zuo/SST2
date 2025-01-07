@@ -14,7 +14,11 @@ import openmm
 from openmm import unit
 import openmm.app as app
 
-from .tools import setup_simulation, create_system_simulation, get_forces, simulate
+# Test to launch directly the script
+try:
+    from .tools import setup_simulation, create_system_simulation, get_forces, simulate
+except ImportError:
+    from tools import setup_simulation, create_system_simulation, get_forces, simulate
 
 # Logging
 logger = logging.getLogger(__name__)
@@ -1034,8 +1038,8 @@ class REST1:
 
         return (
             E_solute,
-            (1 / self.scale) * E_solvent,
-            (1 / self.scale) ** 0.5 * solvent_solute_nb,
+            (1/self.scale) * E_solvent,
+            (1/self.scale) ** 0.5 * solvent_solute_nb,
         )
 
     def get_customPotEnergie(self):
@@ -1140,7 +1144,7 @@ if __name__ == "__main__":
 
     pdb = app.PDBFile(f"src/SST2/tests/inputs/{name}_equi_water.pdb")
 
-    integrator = LangevinMiddleIntegrator(temperature, friction, dt)
+    integrator = openmm.LangevinMiddleIntegrator(temperature, friction, dt)
 
     system = forcefield.createSystem(
         pdb.topology,
@@ -1317,8 +1321,12 @@ if __name__ == "__main__":
 
 
     scale = 0.5
-    test.scale_nonbonded_bonded(scale)
-    print("REST1 forces 600K:")
+    ref_temp = 300
+    new_temp = 600
+    scale = ref_temp / new_temp
+
+    test.scale_nonbonded_bonded(1/scale)
+    print(f"REST1 forces 600K:  scale={scale}")
     tools.print_forces(test.system, test.simulation)
     forces_rest1 = tools.get_forces(test.system, test.simulation)
     (
@@ -1326,6 +1334,12 @@ if __name__ == "__main__":
         E_solvent_new,
         solvent_solute_nb_new,
     ) = test.compute_all_energies()
+
+    print(f"E_solute             {E_solute_new}")
+    print(f"E_solvent            {E_solvent_new}")
+    print(f"solvent_solute_nb    {solvent_solute_nb_new}")
+
+
     print(f"ratio new/old E_solute             {E_solute/E_solute_new}")
     print(f"ratio new/old E_solvent            {E_solvent/E_solvent_new}")
     print(f"ratio new/old solvent_solute_nb    {solvent_solute_nb/solvent_solute_nb_new}")

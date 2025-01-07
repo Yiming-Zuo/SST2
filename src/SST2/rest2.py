@@ -14,7 +14,11 @@ import openmm
 from openmm import unit
 import openmm.app as app
 
-from .tools import setup_simulation, create_system_simulation, get_forces, simulate
+# Test to launch directly the script
+try:
+    from .tools import setup_simulation, create_system_simulation, get_forces, simulate
+except ImportError:
+    from tools import setup_simulation, create_system_simulation, get_forces, simulate
 
 # Logging
 logger = logging.getLogger(__name__)
@@ -1015,12 +1019,13 @@ def run_rest2(
 
 if __name__ == "__main__":
     # Check energy decompostion is correct:
+    import tools
 
     # Whole system:
     OUT_PATH = "/mnt/Data_3/SST2_clean/tmp"
     name = "2HPL"
 
-    forcefield = ForceField("amber14-all.xml", "amber14/tip3pfb.xml")
+    forcefield = app.ForceField("amber14-all.xml", "amber14/tip3pfb.xml")
 
     dt = 2 * unit.femtosecond
     temperature = 300 * unit.kelvin
@@ -1028,15 +1033,15 @@ if __name__ == "__main__":
 
     # SYSTEM
 
-    pdb = app.PDBFile(f"{name}_equi_water.pdb")
+    pdb = app.PDBFile(f"src/SST2/tests/inputs/{name}_equi_water.pdb")
 
-    integrator = LangevinMiddleIntegrator(temperature, friction, dt)
+    integrator = openmm.LangevinMiddleIntegrator(temperature, friction, dt)
 
     system = forcefield.createSystem(
         pdb.topology,
-        nonbondedMethod=PME,
+        nonbondedMethod=app.PME,
         nonbondedCutoff=1 * unit.nanometers,
-        constraints=HBonds,
+        constraints=app.HBonds,
     )
 
     simulation = setup_simulation(
@@ -1044,7 +1049,8 @@ if __name__ == "__main__":
     )
 
     print("Whole system energy")
-    forces_sys = print_forces(system, simulation)
+    tools.print_forces(system, simulation)
+    forces_sys = tools.get_forces(system, simulation)
 
     """
     nsteps=10000
@@ -1081,13 +1087,13 @@ if __name__ == "__main__":
 
     pdb_pep = app.PDBFile(f"{name}_only_pep.pdb")
 
-    integrator_pep = LangevinMiddleIntegrator(temperature, friction, dt)
+    integrator_pep = openmm.LangevinMiddleIntegrator(temperature, friction, dt)
 
     system_pep = forcefield.createSystem(
         pdb_pep.topology,
-        nonbondedMethod=PME,
+        nonbondedMethod=app.PME,
         nonbondedCutoff=1 * unit.nanometers,
-        constraints=HBonds,
+        constraints=app.HBonds,
     )
 
     simulation_pep = setup_simulation(
@@ -1095,19 +1101,20 @@ if __name__ == "__main__":
     )
 
     print("Peptide forces:")
-    forces_pep = print_forces(system_pep, simulation_pep)
+    tools.print_forces(system_pep, simulation_pep)
+    forces_pep = tools.get_forces(system_pep, simulation_pep)
 
     # NO Peptide system
 
     pdb_no_pep = app.PDBFile(f"{name}_no_pep.pdb")
 
-    integrator_no_pep = LangevinMiddleIntegrator(temperature, friction, dt)
+    integrator_no_pep = openmm.LangevinMiddleIntegrator(temperature, friction, dt)
 
     system_no_pep = forcefield.createSystem(
         pdb_no_pep.topology,
-        nonbondedMethod=PME,
+        nonbondedMethod=app.PME,
         nonbondedCutoff=1 * unit.nanometers,
-        constraints=HBonds,
+        constraints=app.HBonds,
     )
 
     simulation_no_pep = setup_simulation(
@@ -1119,7 +1126,8 @@ if __name__ == "__main__":
     )
 
     print("No Peptide forces:")
-    forces_no_pep = print_forces(system_no_pep, simulation_no_pep)
+    tools.print_forces(system_no_pep, simulation_no_pep)
+    forces_no_pep = tools.get_forces(system_no_pep, simulation_no_pep)
 
     ####################
     # ## REST2 test ####
@@ -1136,12 +1144,13 @@ if __name__ == "__main__":
 
     print(f" {len(solute_indices)} atom in solute group")
 
-    integrator_rest = LangevinMiddleIntegrator(temperature, friction, dt)
+    integrator_rest = openmm.LangevinMiddleIntegrator(temperature, friction, dt)
 
     test = REST2(system, pdb, forcefield, solute_indices, integrator_rest)
 
     print("REST2 forces 300K:")
-    forces_rest2 = print_forces(test.system, test.simulation)
+    tools.print_forces(test.system, test.simulation)
+    forces_rest2 = tools.get_forces(test.system, test.simulation)
 
     (
         E_solute_scaled,
@@ -1167,9 +1176,9 @@ if __name__ == "__main__":
         + forces_rest2[5]["energy"]
         + forces_rest2[6]["energy"]
     )
-    print(f"PeriodicTorsionForce {torsion_force/forces_sys[3]['energy']:.5e}")
+    print(f"PeriodicTorsionForce {torsion_force/forces_sys[2]['energy']:.5e}")
     print(
-        f"NonbondedForce       {forces_rest2[2]['energy']/forces_sys[2]['energy']:.5e}"
+        f"NonbondedForce       {forces_rest2[1]['energy']/forces_sys[1]['energy']:.5e}"
     )
     print(
         f"Total                {forces_rest2[9]['energy']/forces_sys[6]['energy']:.5e}"
@@ -1177,31 +1186,32 @@ if __name__ == "__main__":
 
     print("\nCompare torsion energy rest2 vs. pep:\n")
     torsion_force = forces_rest2[4]["energy"] + forces_rest2[5]["energy"]
-    print(f"PeriodicTorsionForce {torsion_force/forces_pep[3]['energy']:.5e}")
+    print(f"PeriodicTorsionForce {torsion_force/forces_pep[2]['energy']:.5e}")
 
     print("\nCompare torsion energy rest2 vs. no pep:\n")
     torsion_force = forces_rest2[6]["energy"]
-    print(f"PeriodicTorsionForce {torsion_force/forces_no_pep[3]['energy']:.5e}")
+    print(f"PeriodicTorsionForce {torsion_force/forces_no_pep[2]['energy']:.5e}")
 
     print("\nCompare nonbond energy rest2 vs. no pep+pep+solvent_solute_nb:\n")
     non_bonded = (
-        solvent_solute_nb + forces_pep[2]["energy"] + forces_no_pep[2]["energy"]
+        solvent_solute_nb + forces_pep[1]["energy"] + forces_no_pep[1]["energy"]
     )
-    print(f"NonbondedForce       {non_bonded/forces_sys[2]['energy']:.5e}")
+    print(f"NonbondedForce       {non_bonded/forces_sys[1]['energy']:.5e}")
 
-    solute_scaled_force = forces_rest2[4]["energy"] + forces_pep[2]["energy"]
+    solute_scaled_force = forces_rest2[4]["energy"] + forces_pep[1]["energy"]
     print(f"E_solute_scaled      {solute_scaled_force/E_solute_scaled:.5e}")
     solute_not_scaled_force = (
-        forces_rest2[5]["energy"] + forces_pep[0]["energy"] + +forces_pep[1]["energy"]
+        forces_rest2[5]["energy"] + forces_pep[0]["energy"] +forces_pep[4]["energy"]
     )
-    print(f"E_solute_not_scaled  {non_bonded/forces_sys[2]['energy']:.5e}")
+    print(f"E_solute_not_scaled  {solute_not_scaled_force/E_solute_not_scaled:.5e}")
 
     print(f"E_solvent            {E_solvent/forces_no_pep[6]['energy']:.5e}")
 
     scale = 0.5
     test.scale_nonbonded_torsion(scale)
     print("REST2 forces 600K:")
-    forces_rest2 = print_forces(test.system, test.simulation)
+    tools.print_forces(test.system, test.simulation)
+    forces_rest2 = tools.get_forces(test.system, test.simulation)
     (
         E_solute_scaled,
         E_solute_not_scaled,
@@ -1218,7 +1228,7 @@ if __name__ == "__main__":
         f"HarmonicBondForce    {forces_rest2[0]['energy']/forces_sys[0]['energy']:.5e}"
     )
     print(
-        f"HarmonicAngleForce   {forces_rest2[1]['energy']/forces_sys[1]['energy']:.5e}"
+        f"HarmonicAngleForce   {forces_rest2[3]['energy']/forces_sys[4]['energy']:.5e}"
     )
     print("Compare scaled energy:")
     torsion_force = (
@@ -1226,9 +1236,9 @@ if __name__ == "__main__":
         + forces_rest2[5]["energy"]
         + forces_rest2[6]["energy"]
     )
-    print(f"PeriodicTorsionForce {torsion_force/forces_sys[3]['energy']:.5e}")
+    print(f"PeriodicTorsionForce {torsion_force/forces_sys[2]['energy']:.5e}")
     print(
-        f"NonbondedForce       {forces_rest2[2]['energy']/forces_sys[2]['energy']:.5e}"
+        f"NonbondedForce       {forces_rest2[1]['energy']/forces_sys[1]['energy']:.5e}"
     )
     print(
         f"Total                {forces_rest2[9]['energy']/forces_sys[6]['energy']:.5e}"
@@ -1236,17 +1246,17 @@ if __name__ == "__main__":
 
     print("\nCompare torsion energy rest2 vs. pep:\n")
     torsion_force = forces_rest2[4]["energy"] + forces_rest2[5]["energy"]
-    print(f"PeriodicTorsionForce {torsion_force/forces_pep[3]['energy']:.5e}")
+    print(f"PeriodicTorsionForce {torsion_force/forces_pep[2]['energy']:.5e}")
 
     print("\nCompare torsion energy rest2 vs. no pep:\n")
     torsion_force = forces_rest2[6]["energy"]
-    print(f"PeriodicTorsionForce {torsion_force/forces_no_pep[3]['energy']:.5e}")
+    print(f"PeriodicTorsionForce {torsion_force/forces_no_pep[2]['energy']:.5e}")
 
     print("\nCompare nonbond energy rest2 vs. no pep+pep+solvent_solute_nb:\n")
     non_bonded = (
-        solvent_solute_nb + forces_pep[2]["energy"] + forces_no_pep[2]["energy"]
+        solvent_solute_nb + forces_pep[1]["energy"] + forces_no_pep[1]["energy"]
     )
-    print(f"NonbondedForce       {non_bonded/forces_sys[2]['energy']:.5e}")
+    print(f"NonbondedForce       {non_bonded/forces_sys[1]['energy']:.5e}")
 
     solute_scaled_force = forces_rest2[4]["energy"] + forces_pep[2]["energy"]
     print(f"E_solute_scaled      {solute_scaled_force/E_solute_scaled:.5e}")
