@@ -17,10 +17,10 @@ terms of the solute were scaled among the bonded terms:
     \sqrt{\frac{\beta_m}{\beta_{ref}}} E_{pw}(X)
     +  E_{ww}(X)
 
-or using $\lambda_m = \sfrac{\beta_m}{\beta_{ref}}$:
+or using :math:`\lambda_m = \frac{\beta_m}{\beta_{ref}}`:
 
 .. math::
-    $E_{m}^{SST2} (X) = \lambda_m E_{pp}^{(1)}(X) + E_{pp}^{(2)}(X) + \\
+    E_{m}^{SST2} (X) = \lambda_m E_{pp}^{(1)}(X) + E_{pp}^{(2)}(X) + \\
     \sqrt{\lambda_m} E_{pw}(X) +  E_{ww}(X)
 
 

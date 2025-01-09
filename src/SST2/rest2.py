@@ -1025,13 +1025,20 @@ if __name__ == "__main__":
     OUT_PATH = "/mnt/Data_3/SST2_clean/tmp"
     name = "2HPL"
 
-    forcefield = app.ForceField("amber14-all.xml", "amber14/tip3pfb.xml")
+    #forcefield = app.ForceField("amber14-all.xml", "amber14/tip3pfb.xml")
+    forcefield = app.ForceField("charmm36.xml", "charmm36/tip3p-pme-b.xml")
 
     dt = 2 * unit.femtosecond
     temperature = 300 * unit.kelvin
     friction = 1 / unit.picoseconds
 
     # SYSTEM
+
+    equi_coor = pdb_numpy.Coor(f"src/SST2/tests/inputs/{name}_equi_water.pdb")
+    solute = equi_coor.select_atoms("chain B")
+    solute.write(f"{name}_only_pep.pdb", overwrite=True)
+    solvant = equi_coor.select_atoms("not chain B")
+    solvant.write(f"{name}_no_pep.pdb", overwrite=True)
 
     pdb = app.PDBFile(f"src/SST2/tests/inputs/{name}_equi_water.pdb")
 
