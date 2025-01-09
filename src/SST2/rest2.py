@@ -248,6 +248,16 @@ class REST2:
         }
         self.scale = 1.0
 
+        if "CMAPTorsionForce" in self.system_forces:
+            self.CMAP_flag = True
+            logger.info("CMAP Founded, probably Charmm36 format")
+        if "CustomNonbondedForce" in self.system_forces:
+            self.LJ_flag = True
+            logger.info("CustomNonbondedForce Founded, probably Charmm36 format")
+        if "CustomBondForce" in self.system_forces:
+            self.Bond_flag = True
+            logger.info("CustomBondForce Founded, probably Charmm36 format")
+
         # Extract solute nonbonded index and values
         self.find_solute_nb_index()
         # Separate solute torsion from the solvent
