@@ -1226,14 +1226,16 @@ def plot_rung_occupancy(df, hue='group'):
 
 def count_rmsd_transition(df,
     rmsd_fold=0.2, rmsd_unfold=0.4, dt=None,
-    rmsd_col='RMSD (nm)', time_ax_name=r"$Time\;(\mu s)$"):
+    sim_name_col="sim",
+    rmsd_col='RMSD (nm)',
+    time_ax_name=r"$Time\;(\mu s)$"):
 
-    sim_list = df.sim.unique()
+    sim_list = df[sim_name_col].unique()
     trans_list = []
 
     for sim in sim_list:
 
-        sim_df = df[df.sim == sim]
+        sim_df = df[df[sim_name_col] == sim]
 
         trans_num = 0
         fold_state = True if sim_df[rmsd_col].iloc[0] < rmsd_fold else False
@@ -1265,14 +1267,14 @@ def count_rmsd_transition(df,
     return df_trans
 
 
-def count_clust_transition(df, clust_col='clust', time_ax_name=r"$Time\;(\mu s)$"):
+def count_clust_transition(df, sim_name_col="sim", clust_col='clust', time_ax_name=r"$Time\;(\mu s)$"):
 
-    sim_list = df.sim.unique()
+    sim_list = df[sim_name_col].unique()
     trans_list = []
     
     for sim in sim_list:
 
-        sim_df = df[df.sim == sim]
+        sim_df = df[df[sim_name_col] == sim]
 
         last_clust = sim_df[clust_col].iloc[0]
         clust_num = 0
