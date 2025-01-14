@@ -308,13 +308,14 @@ class SST1(object):
                 df_local = df_temp[df_temp["Aim Temp (K)"] == temp]
                 self._e_num[temp_index] = len(df_local)
                 self._e_solute_avg[temp_index] = (
-                    df_local["E solute scaled (kJ/mole)"].mean()
+                    df_local["E solute (kJ/mole)"].mean()
                     * unit.kilojoules_per_mole
                 )
                 self._e_solute_solv_avg[temp_index] = (
                     df_local["E solvent-solute (kJ/mole)"].mean()
                     * unit.kilojoules_per_mole
                 )
+
 
             first_temp_index = 0
             for index, row in df_sim.iloc[::-1].iterrows():
