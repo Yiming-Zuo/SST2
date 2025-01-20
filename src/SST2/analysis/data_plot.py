@@ -1225,7 +1225,9 @@ def plot_rung_occupancy(df, hue='group'):
 
 
 def count_rmsd_transition(df,
-    rmsd_fold=0.2, rmsd_unfold=0.4, dt=None,
+    rmsd_fold=0.2,
+    rmsd_unfold=0.4,
+    dt=None,
     sim_name_col="sim",
     rmsd_col='RMSD (nm)',
     time_ax_name=r"$Time\;(\mu s)$"):
@@ -1267,7 +1269,12 @@ def count_rmsd_transition(df,
     return df_trans
 
 
-def count_clust_transition(df, sim_name_col="sim", clust_col='clust', time_ax_name=r"$Time\;(\mu s)$"):
+def count_clust_transition(
+        df,
+        dt=None,
+        sim_name_col="sim",
+        clust_col='clust',
+        time_ax_name=r"$Time\;(\mu s)$"):
 
     sim_list = df[sim_name_col].unique()
     trans_list = []
@@ -1283,8 +1290,18 @@ def count_clust_transition(df, sim_name_col="sim", clust_col='clust', time_ax_na
             if (not np.isnan(clust)) and (clust != last_clust):
                 clust_num += 1
                 last_clust = clust
+        if dt is None:
+            dt_sim = sim_df[time_ax_name].iloc[1] - sim_df[time_ax_name].iloc[0]
+            dt_steps = dt_sim * 1e6
+        else:
+            dt_sim = dt
+            step_gap = sim_df["Step"].iloc[1] - sim_df["Step"].iloc[0]
+            dt_steps = step_gap * dt_sim
 
-        trans_freq = clust_num / sim_df[time_ax_name].iloc[-1]
+        max_time = len(sim_df) * dt_steps / 1e6
+        logger.info(f"Computed max time: {max_time:.3f}, df max time: {sim_df[time_ax_name].iloc[-1]:.3f}")
+
+        trans_freq = clust_num / max_time
 
         logger.info(f'sim: {sim:20}  clust num={clust_num:6}  clust_freq = {trans_freq:.2f}/us')
         trans_list.append(trans_freq)
