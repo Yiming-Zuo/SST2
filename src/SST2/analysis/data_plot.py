@@ -744,88 +744,6 @@ def plot_weight_RMSD(df,
 
     return
 
-"""
-def plot_free_energy(
-        xall, yall, weights=None, ax=None, nbins=100, ncontours=100,
-        avoid_zero_count=False, minener_zero=True, kT=2.479,
-        vmin=None, vmax=None, cmap='nipy_spectral', cbar=True,
-        cbar_label='free energy (kJ/mol)', cax=None, levels=None,
-        cbar_orientation='vertical', norm=None, range=None,
-        level_gap=None):
-    #Adapted from;
-    # https://github.com/markovmodel/PyEMMA/blob/devel/pyemma/plots/plots2d.py
-    #
-    
-    z, xedge, yedge = np.histogram2d(
-        xall, yall, bins=nbins, weights=weights, range=range)
-    if avoid_zero_count:
-        z = np.maximum(z, np.min(z[z.nonzero()]))
-    x = 0.5 * (xedge[:-1] + xedge[1:])
-    y = 0.5 * (yedge[:-1] + yedge[1:])
-    
-    pi = z.T / float(z.sum())
-    free_energy = np.inf * np.ones(shape=z.shape)
-    nonzero = pi.nonzero()
-    zero = np.nonzero(pi == 0)
-    free_energy[nonzero] = -np.log(pi[nonzero])
-    #if minener_zero:
-    free_energy[nonzero] -= np.min(free_energy[nonzero])
-    free_energy *= kT
-
-    # to show the highest free energy zones in the map,
-    # replace infinity by a value slightly above the maximum free energy:
-
-    if vmax is None:
-        vmax = np.max(free_energy[nonzero])+0.5
-
-    #free_energy[zero] = vmax + 10.0
-    free_energy[zero] = np.NaN
-
-    if vmin is None:
-        vmin = 0
-
-    # and fix the levels for the colormap:
-    if levels is None:
-        cbar_ticks = np.linspace(vmin, vmax, ncontours)
-    else:
-        cbar_ticks = np.linspace(vmin, vmax, levels + 1)      
-
-    #print(vmax, cbar_ticks)
-
-    if ax is None:
-        fig, ax = plt.subplots()
-    else:
-        fig = ax.get_figure()
-    
-    if levels is None and level_gap is not None:
-        max_free = np.max(free_energy[nonzero])
-        levels = int(max_free // level_gap)
-        print(levels)
-
-    mappable = ax.contourf(
-        x, y, free_energy, ncontours, norm=norm,
-        vmin=vmin, vmax=vmax, cmap=cmap,
-        #extend='both',
-        levels=cbar_ticks)
-    
-    misc = dict(mappable=mappable)
-    if cbar:
-        if levels is not None:
-            #print("ticks", levels, cbar_ticks)
-            cbar = fig.colorbar(
-                mappable,
-                ax=ax,
-                orientation=cbar_orientation,
-                ticks=cbar_ticks,
-                #extend='both'
-                )
-        else:
-            cbar = fig.colorbar(mappable, ax=ax, orientation=cbar_orientation)
-        cbar.set_label(cbar_label)
-        misc.update(cbar=cbar)
-
-    return fig, ax, misc
-"""
 
 def plot_free_energy(
         xall, yall, weights=None, ax=None, nbins=100, ncontours=100,
@@ -834,10 +752,65 @@ def plot_free_energy(
         cbar_label='free energy (kJ/mol)', cax=None, levels=None,
         cbar_orientation='vertical', norm=None, range=None,
         level_gap=None):
-    # Adapted from;
-    # https://github.com/markovmodel/PyEMMA/blob/devel/pyemma/plots/plots2d.py
-    #
+    """
+    Plot the free energy of a 2D histogram.
+
+    Adapted from;
+    https://github.com/markovmodel/PyEMMA/blob/devel/pyemma/plots/plots2d.py
+
+    Parameters
+    ----------
+    xall : np.array
+        Array with the x data.
+    yall : np.array
+        Array with the y data.
+    weights : np.array, optional
+        Array with the weights. The default is None.
+    ax : matplotlib.axes._subplots.AxesSubplot, optional
+        Axes of the plot. The default is None.
+    nbins : int, optional
+        Number of bins. The default is 100.
+    ncontours : int, optional
+        Number of contours. The default is 100.
+    avoid_zero_count : bool, optional
+        Avoid zero count. The default is False.
+    minener_zero : bool, optional
+        Minimum energy to zero. The default is True.
+    kT : float, optional
+        kT value. The default is 2.479.
+    vmin : float, optional
+        Minimum value. The default is None.
+    vmax : float, optional
+        Maximum value. The default is None.
+    cmap : str, optional
+        Colormap. The default is 'nipy_spectral'.
+    cbar : bool, optional
+        Add colorbar. The default is True.
+    cbar_label : str, optional
+        Label of the colorbar. The default is 'free energy (kJ/mol)'.
+    cax : matplotlib.axes._subplots.AxesSubplot, optional
+        Axes of the colorbar. The default is None.
+    levels : int, optional
+        Number of levels. The default is None.
+    cbar_orientation : str, optional
+        Orientation of the colorbar. The default is 'vertical'.
+    norm : matplotlib.colors.Normalize, optional
+        Normalize object. The default is None.
+    range : list, optional
+        Range of the data. The default is None.
+    level_gap : float, optional
+        Gap between levels. The default is None.
     
+    Returns
+    -------
+    fig : matplotlib.figure.Figure
+        Figure of the plot.
+    ax : matplotlib.axes._subplots.AxesSubplot
+        Axes of the plot.
+    misc : dict
+        Dictionary with the colorbar.
+    
+    """
     z, xedge, yedge = np.histogram2d(
         xall, yall, bins=nbins, weights=weights, range=range)
     if avoid_zero_count:
@@ -911,7 +884,23 @@ def plot_free_energy(
     return fig, ax, misc
 
 def compute_cluster_hdbscan(pca_df, min_cluster_size=50, min_samples=50):
+    """
+    Cluster the data using the HDBSCAN algorithm.
 
+    Parameters
+    ----------
+    pca_df : pandas.DataFrame
+        Dataframe with the data to cluster.
+    min_cluster_size : int, optional
+        Minimum cluster size. The default is 50.
+    min_samples : int, optional
+        Minimum number of samples. The default is 50.
+    
+    Returns
+    -------
+    clust_serie : pandas.Categorical
+        Categorical serie with the cluster.
+    """
     import hdbscan
 
     clusterer = hdbscan.HDBSCAN(
@@ -963,6 +952,26 @@ def compute_cluster_hdbscan(pca_df, min_cluster_size=50, min_samples=50):
 
 
 def compute_cluster_kmean(pca_df, max_cluster=20, random_state=0):
+    """
+    Cluster the data using the KMeans algorithm.
+
+    Parameters
+    ----------
+    pca_df : pandas.DataFrame
+        Dataframe with the data to cluster.
+    max_cluster : int, optional
+        Maximum number of cluster to test. The default is 20.
+    random_state : int, optional
+        Random state for the algorithm. The default is 0.
+    
+    Returns
+    -------
+    clust_serie : pandas.Categorical
+        Categorical serie with the cluster.
+    kmeans.cluster_centers_ : numpy.ndarray
+        Cluster centers.
+    
+    """
 
     from sklearn.cluster import KMeans
     from sklearn.metrics import silhouette_score
@@ -1003,6 +1012,21 @@ def compute_cluster_kmean(pca_df, max_cluster=20, random_state=0):
 
 
 def compute_Tm(temperatures, folding_fraction):
+    """
+    Compute the melting temperature using a sigmoidal curve fit.
+
+    Parameters
+    ----------
+    temperatures : list
+        List of temperatures.
+    folding_fraction : list
+        List of folding fraction.
+    
+    Returns
+    -------
+    Tm : float
+        Melting temperature.
+    """
 
     from scipy.optimize import curve_fit
 
@@ -1020,16 +1044,51 @@ def compute_Tm(temperatures, folding_fraction):
         return(None)
 
 
-def plot_folding_fraction(df, col="RMSD (nm)", cutoff=0.18, label=None,
-    start_time=0, time_ax_name=r"$Time\;(\mu s)$", recompute_temp_flag=True,
-    ref_temp=300.0):
+def plot_folding_fraction(df,
+                col="RMSD (nm)",
+                cutoff=0.18,
+                label=None,
+                start_time=0,
+                time_ax_name=r"$Time\;(\mu s)$",
+                recompute_temp_flag=True,
+                temp_col='Aim Temp (K)',
+                ref_temp=300.0):
+    """
+    Plot the fraction of folded protein as a function of the temperature.
+
+    Parameters
+    ----------
+    df : pandas.DataFrame
+        Dataframe with the data to plot.
+    col : str, optional
+        Column to compute folding fraction. The default is "RMSD (nm)".
+    cutoff : float, optional
+        Cutoff value for the folding fraction. The default is 0.18 nm.
+    label : str, optional
+        Label of the plot. The default is None.
+    start_time : float, optional
+        Start time of the simulation. The default is 0 us.
+    time_ax_name : str, optional
+        Name of the time axis. The default is r"$Time\;(\mu s)$".
+    recompute_temp_flag : bool, optional
+        Recompute the temperature. The default is True.
+    temp_col : str, optional
+        Column with the temperature. The default is 'Aim Temp (K)'.
+    ref_temp : float, optional
+        Reference temperature. The default is 300.0.
+    
+    Returns
+    -------
+    Tm : float
+        Melting temperature
+    """
 
     df_time = df[(df[time_ax_name] > start_time)]
 
     fold_frac = compute_folding_fraction(
         df_time, col, cutoff)
 
-    temp_list = df['Aim Temp (K)'].unique()
+    temp_list = df[temp_col].unique()
     temp_list.sort()
 
     if recompute_temp_flag:
@@ -1046,10 +1105,35 @@ def plot_folding_fraction(df, col="RMSD (nm)", cutoff=0.18, label=None,
     return compute_Tm(temp_list, fold_frac)
 
 
-def compute_folding_fraction(df, col="RMSD (nm)", cutoff=0.18, temp_list=None):
+def compute_folding_fraction(
+        df,
+        col="RMSD (nm)",
+        cutoff=0.18,
+        temp_col='Aim Temp (K)',
+        temp_list=None):
+    """ Compute the fraction of folded protein.
+
+    Parameters
+    ----------
+    df : pandas.DataFrame
+        Dataframe with the data to plot.
+    col : str, optional
+        Column to compute folding fraction. The default is "RMSD (nm)".
+    cutoff : float, optional
+        Cutoff value for the folding fraction. The default is 0.18 nm.
+    temp_col : str, optional
+        Column with the temperature. The default is 'Aim Temp (K)'.
+    temp_list : list, optional
+        List of temperature to use. The default is None.
+    
+    Returns
+    -------
+    fold_frac : list
+        List of folding fraction.
+    """
 
     if temp_list is None:
-        temp_list = df['Aim Temp (K)'].unique()
+        temp_list = df[temp_col].unique()
         temp_list.sort()
     else:
         temp_list.sort()
@@ -1057,7 +1141,7 @@ def compute_folding_fraction(df, col="RMSD (nm)", cutoff=0.18, temp_list=None):
 
     for temp in temp_list:
         
-        local_df = df[(df["Aim Temp (K)"] == temp)]
+        local_df = df[(df[temp_col] == temp)]
         
         num_frame = len(local_df)
         num_cutoff = sum(local_df[col] < cutoff)
