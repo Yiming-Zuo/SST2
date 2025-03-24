@@ -59,6 +59,10 @@ See also the list of [contributors](https://github.com/samuelmurail/SST2/contrib
 
 This project is licensed under the GNU General Public License v2.0 - see the ``LICENSE`` file for details.
 
+## Acknowledgments
+
+We'd like to thanks Benjamin Ye ([mdcraft](https://mdcraft.readthedocs.io)) which mdcraft's topology module was used in this project.
+
 ## Citation
 
 If you use this code in your research, please cite our paper:

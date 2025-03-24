@@ -706,6 +706,48 @@ def add_pos_restr(system, index_list, cif_ref, k_rest, restr_force_group=None, c
     
     return restraint
 
+
+def add_distance_restr(system, index_0_list, index_1_list, dist_min_list, k_rest, restr_force_group=None, constant_name="k_dist"):
+    """Add position restraints to the system
+
+    Parameters
+    ----------
+    system : openmm.System
+        System object
+    index_0 : int
+        Index of the first atom
+    index_1 : int
+        Index of the second atom
+    dist_min : float
+        Minimum distance (nm)
+    k_rest : float
+        Force constant (KJ/mol/nm^2)
+    restr_force_group : int
+        Force group, default is 2
+    constant_name : str
+        Name of the force constant, default is k_dist
+    
+    Returns
+    -------
+    restraint : openmm.CustomExternalForce
+        Restraint object
+    """
+
+    assert len(index_0_list) == len(index_1_list) == len(dist_min_list), "index_0, index_1 and dist_min must have the same length"
+
+    energy_function = f"{constant_name}*(max(0, r - r0))^2"
+    restraint = openmm.CustomBondForce(energy_function)
+    system.addForce(restraint)
+    restraint.addGlobalParameter(constant_name, k_rest*unit.kilojoules_per_mole/unit.nanometer**2)
+    restraint.addPerBondParameter('r0')
+    for index_0, index_1, dist_min in zip(index_0_list, index_1_list, dist_min_list):
+        restraint.addBond(index_0, index_1, [dist_min * unit.nanometer])
+
+    if restr_force_group is not None:
+        restraint.setForceGroup(restr_force_group)
+    
+    return restraint
+
 def compute_ladder_num(generic_name, min_temp, max_temp, sst2_score=False):
     if type(min_temp) not in [int, float]:
         min_temp = min_temp._value

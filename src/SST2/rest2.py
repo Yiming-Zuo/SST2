@@ -17,12 +17,13 @@ import openmm.app as app
 # Test to launch directly the script
 try:
     from .tools import setup_simulation, create_system_simulation, get_forces, simulate
+    from .topology import get_subset
 except ImportError:
     from tools import setup_simulation, create_system_simulation, get_forces, simulate
+    from topology import get_subset
 
 # Logging
 logger = logging.getLogger(__name__)
-
 
 class Rest2Reporter(object):
     """Reporter for REST2 simulation
@@ -579,35 +580,45 @@ class REST2:
 
         # Redirect stdout in the variable new_stdout:
         old_stdout = sys.stdout
-        stdout = new_stdout = StringIO()
+        solvent_stdout = StringIO()
+        solute_stdout = StringIO()
         # In case of dummy atoms (position restraints, ...)
         # It has to be removed from pdb files
         top_num_atom = self.topology.getNumAtoms()
 
+        # print(self.positions)
+        # print(self.solvent_index)
+        solvent_top, solvent_pos = get_subset(self.topology, self.positions, keep=self.solvent_index, types="atom")
+        # print(len(solvent_pos), len([self.positions[i] for i in self.solvent_index]))
         app.PDBFile.writeFile(
-            self.topology, self.positions[:top_num_atom], stdout, True
+            solvent_top, solvent_pos,
+            solvent_stdout, True
         )
+        app.PDBFile.writeFile(
+            solvent_top, solvent_pos,
+            'tmp_solvent.pdb', True
+        )
+
+        # Need to use the get_subset function because of small molecule issue related
+        solute_top, solute_pos = get_subset(self.topology, self.positions, keep=self.solute_index, types="atom")
+
+        app.PDBFile.writeFile(
+            solute_top,
+            solute_pos,
+            solute_stdout, True
+        )
+        app.PDBFile.writeFile(
+            solute_top,
+            solute_pos,
+            'tmp_solute.pdb', True
+        )
+
         sys.stdout = old_stdout
-
-        # Read
-        solute_solvent_coor = pdb_numpy.format.pdb.parse(
-            new_stdout.getvalue().split("\n")
-        )
-
-        # Separate coordinates in two pdb files:
-        solute_coor = solute_solvent_coor.select_index(self.solute_index)
-        # solute_coor.write(solute_out_pdb, overwrite=True)
-        # To avoid saving a temporary file, we use StringIO
-        solute_out_pdb = StringIO(pdb_numpy.format.pdb.get_pdb_string(solute_coor))
-
-        solvent_coor = solute_solvent_coor.select_index(self.solvent_index)
-        # solvent_coor.write(solvent_out_pdb, overwrite=True)
-        # To avoid saving a temporary file, we use StringIO
-        solvent_out_pdb = StringIO(pdb_numpy.format.pdb.get_pdb_string(solvent_coor))
-
         # Create system and simulations:
+        # I don't understand why I need to pass solute_stdout (a StringIO) to StringIO(solute_stdout.getvalue())
+        # It's a dirty fix
         self.system_solute, self.simulation_solute = create_system_simulation(
-            solute_out_pdb,
+            StringIO(solute_stdout.getvalue()),
             cif_format=False,
             forcefield=forcefield,
             nonbondedMethod=nonbondedMethod,
@@ -625,7 +636,7 @@ class REST2:
         }
 
         self.system_solvent, self.simulation_solvent = create_system_simulation(
-            solvent_out_pdb,
+            StringIO(solvent_stdout.getvalue()),
             cif_format=False,
             forcefield=forcefield,
             nonbondedMethod=nonbondedMethod,
