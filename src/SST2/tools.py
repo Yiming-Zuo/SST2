@@ -293,8 +293,9 @@ def implicit_sim(
 def create_water_box(
     in_cif,
     out_cif,
-    pad,
     forcefield,
+    pad=None,
+    vec=None,
     ionicStrength=0.15 * unit.molar,
     positiveIon="Na+",
     negativeIon="Cl-",
@@ -308,10 +309,12 @@ def create_water_box(
         Path to the input cif file
     out_cif : str
         Path to the output cif file
-    pad : float
-        Padding around the peptide in nm
     forcefield : openmm ForceField
         forcefield object
+    pad : float
+        Padding around the peptide in nm
+    vec : float
+        Vector of the box (nm), default is None
     ionicStrength : unit.Quantity
         Ionic strength of the system, default is 0.15 M
     positiveIon : str
@@ -321,6 +324,23 @@ def create_water_box(
     overwrite : bool
         Overwrite the output file, default is False
     """
+
+    if vec is None and pad is None:
+        raise ValueError("Either pad or vec must be defined")
+    if vec is not None and pad is not None:
+        raise ValueError("Either pad or vec must be defined")
+
+    if unit.is_quantity(pad):
+        pad = pad.in_units_of(unit.nanometer)
+    else:
+        if pad is not None:
+            pad = pad * unit.nanometer
+
+    if unit.is_quantity(vec):
+        vec = vec.in_units_of(unit.nanometer)
+    else:
+        if vec is not None:
+            vec = vec * unit.nanometer
 
     cif = app.PDBxFile(in_cif)
 
@@ -343,8 +363,6 @@ def create_water_box(
 
     # Create Box
 
-    boxVectors = None
-    geompadding = pad * unit.nanometer
     maxSize = max(
         max((pos[i] for pos in cif.positions)) - min((pos[i] for pos in cif.positions))
         for i in range(3)
@@ -354,7 +372,12 @@ def create_water_box(
         openmm.Vec3(1 / 3, 2 * unit.sqrt(2) / 3, 0),
         openmm.Vec3(-1 / 3, unit.sqrt(2) / 3, unit.sqrt(6) / 3),
     ]
-    boxVectors = [(maxSize + geompadding) * v for v in vectors]
+
+    if vec is None:
+        boxVectors = [(maxSize + pad) * v for v in vectors]
+    else:
+        boxVectors = [vec * v for v in vectors]
+    logger.info(f'- Adding solvent with a {boxVectors[0][0].value_in_unit(unit.nanometer):.3} nm size box')
 
     modeller.addSolvent(
         forcefield,

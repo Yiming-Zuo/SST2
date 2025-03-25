@@ -594,10 +594,10 @@ class REST2:
             solvent_top, solvent_pos,
             solvent_stdout, True
         )
-        app.PDBFile.writeFile(
-            solvent_top, solvent_pos,
-            'tmp_solvent.pdb', True
-        )
+        # app.PDBFile.writeFile(
+        #     solvent_top, solvent_pos,
+        #     'tmp_solvent.pdb', True
+        # )
 
         # Need to use the get_subset function because of small molecule issue related
         solute_top, solute_pos = get_subset(self.topology, self.positions, keep=self.solute_index, types="atom")
@@ -607,11 +607,11 @@ class REST2:
             solute_pos,
             solute_stdout, True
         )
-        app.PDBFile.writeFile(
-            solute_top,
-            solute_pos,
-            'tmp_solute.pdb', True
-        )
+        # app.PDBFile.writeFile(
+        #     solute_top,
+        #     solute_pos,
+        #     'tmp_solute.pdb', True
+        # )
 
         sys.stdout = old_stdout
         # Create system and simulations:
