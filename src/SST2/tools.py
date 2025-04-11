@@ -772,6 +772,25 @@ def add_distance_restr(system, index_0_list, index_1_list, dist_min_list, k_rest
     return restraint
 
 def compute_ladder_num(generic_name, min_temp, max_temp, sst2_score=False):
+    """Compute the number of temperatures to simulate.
+
+    Parameters
+    ----------
+    generic_name : str
+        Generic name for the simulation files.
+    min_temp : float
+        Minimum temperature to simulate.
+    max_temp : float
+        Maximum temperature to simulate.
+    sst2_score : bool, optional
+        If True, use the SST2 score. The default is False.
+    
+    Returns
+    -------
+    int
+        Number of temperatures to simulate.
+    """
+
     if type(min_temp) not in [int, float]:
         min_temp = min_temp._value
     if type(max_temp) not in [int, float]:
@@ -819,7 +838,7 @@ def compute_ladder_num(generic_name, min_temp, max_temp, sst2_score=False):
     logger.info(f"Denshlag et al. 2 N = {N_Denshlag_2:.2f}")
 
     # print(f'\nHere N = {len(temp_list):.2f}')
-    logger.info(f"\nHere N = {np.ceil(2*N_Denshlag):.2f}")
+    logger.info(f"Here N = {np.ceil(2*N_Denshlag):.2f}")
 
     return int(np.ceil(N_Denshlag))
 

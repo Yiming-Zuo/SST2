@@ -17,6 +17,7 @@ import pdb_numpy
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../src/')))
 
+import SST2
 from SST2.rest2 import REST2, run_rest2
 from SST2.sst2 import run_sst2
 import SST2.tools as tools
@@ -129,6 +130,10 @@ def parser_input():
                         dest="water_ff",
                         help='force field, default=tip3p',
                         default='tip3p')
+    parser.add_argument('-v',
+                        action='store_true',
+                        dest="verbose",
+                        help='Verbose mode')
 
     return parser
 
@@ -137,6 +142,11 @@ if __name__ == "__main__":
     my_parser = parser_input()
     args = my_parser.parse_args()
     logger.info(args)
+
+    if args.verbose:
+        logger.setLevel(logging.DEBUG)
+        logger.debug("Verbose mode activated")
+        SST2.show_log()
 
     OUT_PATH = args.out_dir
     name = args.name
@@ -242,6 +252,7 @@ if __name__ == "__main__":
             args.last_temp,
             sst2_score=True)
         temperatures = None
+        logger.info(f"Estimated number of lambda ladder = {ladder_num}")
     elif args.temp_list is not None:
         ladder_num = len(args.temp_list)
         temperatures = args.temp_list
@@ -252,25 +263,29 @@ if __name__ == "__main__":
     tot_steps = args.time * unit.nanoseconds / dt
     save_step_dcd = 10000
     # save_step_log = 100
+    logger.info(f"SST2 Total simulation steps = {tot_steps}")
 
     tempChangeInterval = int(args.temp_time / dt.in_units_of(unit.picosecond)._value)
-    print(f"Temperature change interval = {tempChangeInterval}")
+    logger.info(f"SST2 Temp. change interval = {tempChangeInterval}")
 
     if args.log_time is not None:
         save_step_log = int(args.log_time / dt.in_units_of(unit.picosecond)._value)
     else:
         save_step_log = tempChangeInterval
 
-    print(f"Log save interval = {save_step_log}")
+    logger.info(f"Log save interval = {save_step_log}")
 
     save_check_steps = int(500.0 * unit.nanoseconds / dt)
-    print(f"Save checkpoint every {save_check_steps} steps")
+    logger.info(f"Save checkpoint every {save_check_steps} steps")
 
     temp_list = tools.compute_temperature_list(
         minTemperature=args.min_temp,
         maxTemperature=args.last_temp,
         numTemperatures=ladder_num,
         refTemperature=args.ref_temp)
+
+    logger.info(f"Using temperatures : {', '.join([str(round(temp.in_units_of(unit.kelvin)._value, 2)) for temp in temp_list])}")
+    logger.info(f"- Launch SST2 simulation")
 
     run_sst2(
         sys_rest2,

@@ -1183,8 +1183,11 @@ def recompute_temp(df, ref_temp=300.0):
     return(new_temp_list)
 
 
-def compute_folding_fraction_RMSD(df, col="RMSD (nm)", cutoff=0.18,
-    start_time=0, time_ax_name=r"$Time\;(\mu s)$",
+def compute_folding_fraction_RMSD(df, col="RMSD (nm)",
+    temp_col='Aim Temp (K)',
+    cutoff=0.18,
+    start_time=0,
+    time_ax_name=r"$Time\;(\mu s)$",
     ref_fold_frac = None,
     time_interval=2.0):
 
@@ -1207,10 +1210,13 @@ def compute_folding_fraction_RMSD(df, col="RMSD (nm)", cutoff=0.18,
 
         df_time = df[(df[time_ax_name] > start_time) &
                      (df[time_ax_name] < start_time + (i + 1) * time_interval)]
-        fold_frac = []
 
         fold_frac = compute_folding_fraction(
-            df_time, col, cutoff, temp_list)
+            df=df_time,
+            col=col,
+            cutoff=cutoff,
+            temp_col=temp_col,
+            temp_list=temp_list)
         
         fold_frac = np.array(fold_frac)
         

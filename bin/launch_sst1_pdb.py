@@ -17,6 +17,7 @@ import pdb_numpy
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../src/')))
 
+import SST2
 from SST2.rest1 import REST1, run_rest1
 from SST2.sst1 import run_sst1
 import SST2.tools as tools
@@ -132,6 +133,11 @@ def parser_input():
                         dest="water_ff",
                         help='force field, default=tip3p',
                         default='tip3p')
+    parser.add_argument('-v',
+                        action='store_true',
+                        dest="verbose",
+                        help='Verbose mode')
+
 
     return parser
 
@@ -139,7 +145,13 @@ if __name__ == "__main__":
 
     my_parser = parser_input()
     args = my_parser.parse_args()
+    
     logger.info(args)
+    if args.verbose:
+        logger.setLevel(logging.DEBUG)
+        logger.debug("Verbose mode activated")
+        SST2.show_log()
+
 
     OUT_PATH = args.out_dir
     name = args.name
