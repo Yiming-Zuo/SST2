@@ -1,19 +1,16 @@
 import argparse
 import copy
 import numpy as np
-import time
+import math
 import os
 import sys
-import math
 import logging
 import pandas as pd
 from io import StringIO
-import pdbfixer
+
 
 from openmm.app import PDBFile, PDBxFile, ForceField
 from openmm import LangevinMiddleIntegrator, unit
-
-import pdb_numpy
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../src/')))
 
@@ -24,7 +21,7 @@ import SST2.tools as tools
 
 # Logging
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
+logger.setLevel(logging.DEBUG)
 # Add sys.sdout as handler
 logger.addHandler(logging.StreamHandler(sys.stdout))
 
@@ -36,8 +33,8 @@ def parser_input():
     # Parse arguments :
     parser = argparse.ArgumentParser(
         description='Simulate a peptide starting from a linear conformation.')
-    parser.add_argument('-pdb', action="store", dest="pdb",
-                        help='Input PDB file', type=str, required=True)
+    parser.add_argument('-seq', action="store", dest="seq",
+                        help='Input Sequence', type=str, required=True)
     parser.add_argument('-n', action="store", dest="name",
                         help='Output file name', type=str, required=True)
     parser.add_argument('-dir', action="store", dest="out_dir",
@@ -47,6 +44,12 @@ def parser_input():
                         help='Box padding, default=1.5 nm',
                         type=float,
                         default=1.5)
+    parser.add_argument('-eq_time_impl',
+                        action="store",
+                        dest="eq_time_impl",
+                        help='Implicit solvent Equilibration time, default=10 (ns)',
+                        type=float,
+                        default=10)
     parser.add_argument('-eq_time_expl',
                         action="store",
                         dest="eq_time_expl",
@@ -118,11 +121,6 @@ def parser_input():
                         action="store_true",
                         dest="exclude_Pro_omega",
                         help='Exclude Proline omega dihedral scale angles')
-    parser.add_argument('-select',
-                        action="store",
-                        dest="solute_sel",
-                        help='Solute selection, default=\"chain A\"',
-                        default='chain A')
     parser.add_argument('-ff',
                         action="store",
                         dest="ff",
@@ -133,6 +131,14 @@ def parser_input():
                         dest="water_ff",
                         help='force field, default=tip3p',
                         default='tip3p')
+    parser.add_argument('-ace',
+                        action='store_true',
+                        dest="ace",
+                        help='Add ACE cap to N-term')
+    parser.add_argument('-nme',
+                        action='store_true',
+                        dest="nme",
+                        help='Add NME cap to C-term')
     parser.add_argument('-v',
                         action='store_true',
                         dest="verbose",
@@ -140,6 +146,10 @@ def parser_input():
 
 
     return parser
+
+
+
+
 
 if __name__ == "__main__":
 
@@ -159,17 +169,57 @@ if __name__ == "__main__":
     if not os.path.exists(OUT_PATH):
         os.makedirs(OUT_PATH)
 
-    tools.prepare_pdb(args.pdb,
+    if args.ace:
+        logger.info("Adding ACE")
+        n_term = "ACE"
+    else:
+        n_term = None
+    
+    if args.nme:
+        logger.info("Adding NME")
+        c_term = "NME"
+    else:
+        c_term = None
+
+    tools.create_linear_peptide(
+        args.seq,
+        f"{OUT_PATH}/{name}_linear.pdb",
+        n_term=n_term, c_term=c_term)
+
+    tools.prepare_pdb(f"{OUT_PATH}/{name}_linear.pdb",
                 f"{OUT_PATH}/{name}_fixed.cif",
                 pH=7.0,
                 overwrite=False)
 
     # should be usabble soon:
-    #forcefield_files = ['amber14-all.xml', 'amber14/tip3pfb.xml', 'implicit/obc2.xml']
+    # forcefield_files = ['amber14-all.xml', 'amber14/tip3pfb.xml', 'implicit/obc2.xml']
+    # forcefield_files = ['amber99sbnmr.xml', 'amber99_obc.xml']
+    # impl_forcefield = ForceField(*forcefield_files)
 
+    if args.ff.startswith('amber'):
+        forcefield_files = ['amber99sbnmr.xml', 'amber99_obc.xml']
+        impl_forcefield = ForceField(*forcefield_files)
+    elif args.ff == "charmm36":
+        forcefield_files = ['charmm36.xml', 'implicit/obc1.xml']
+        impl_forcefield = ForceField(*forcefield_files)
+    else:
+        raise ValueError(f"Force field {args.ff} not recognized")
+
+
+    logger.info(f"- Run implicit simulation")
+
+    tools.implicit_sim(f"{OUT_PATH}/{name}_fixed.cif",
+                 impl_forcefield,
+                 args.eq_time_impl,
+                 f"{OUT_PATH}/{name}_implicit_equi",
+                 temp = args.ref_temp,)
+
+
+    #forcefield_files = ['amber14/protein.ff14SB.xml', 'amber14/tip3p.xml']
+    #forcefield = ForceField(*forcefield_files)
     forcefield = tools.get_forcefield(args.ff, args.water_ff)
 
-    tools.create_water_box(f"{OUT_PATH}/{name}_fixed.cif",
+    tools.create_water_box(f"{OUT_PATH}/{name}_implicit_equi.cif",
                      f"{OUT_PATH}/{name}_water.cif",
                      pad=args.pad,
                      forcefield=forcefield,
@@ -193,18 +243,16 @@ if __name__ == "__main__":
         cif.positions,
         open(f"{OUT_PATH}/{name}_water.pdb", "w"),
         True)
-
-    # Get selection indices
-    coor_init = pdb_numpy.Coor(f"{OUT_PATH}/{name}_water.pdb")
-    solute_indices = coor_init.get_index_select(args.solute_sel)
-    assert len(solute_indices) > 0, "No solute atoms selected"
-    logger.info(f"- Select {len(solute_indices)} solute atoms")
+    
+    # Get indices of the three sets of atoms.
+    all_indices = [int(i.index) for i in cif.topology.atoms()]
+    solute_indices = [int(i.index) for i in cif.topology.atoms() if i.residue.chain.id in ['A']]
 
     integrator = LangevinMiddleIntegrator(temperature, friction, dt)
 
     system = tools.create_sim_system(cif,
-        temp=temperature,
         forcefield=forcefield,
+        temp=temperature,
         h_mass=args.hmr,
         base_force_group=1)
 
@@ -237,12 +285,12 @@ if __name__ == "__main__":
     run_rest1(
         sys_rest1,
         f"{OUT_PATH}/{name}_equi_water",
-        dt=dt,
         tot_steps=nsteps,
+        dt=dt,
         save_step_dcd=100000,
         save_step_log=10000,
         save_step_rest1=500,
-        remove_reporters=False)
+        remove_reporters=False,)
 
 
 
@@ -265,27 +313,33 @@ if __name__ == "__main__":
         ladder_num = args.temp_num
 
     tot_steps = args.time * unit.nanoseconds / dt
+    logger.info(f"Total steps = {tot_steps}")
     save_step_dcd = 10000
     # save_step_log = 100
 
     tempChangeInterval = int(args.temp_time / dt.in_units_of(unit.picosecond)._value)
-    print(f"Temperature change interval = {tempChangeInterval}")
+    logger.info(f"Temperature change interval = {tempChangeInterval}")
 
     if args.log_time is not None:
         save_step_log = int(args.log_time / dt.in_units_of(unit.picosecond)._value)
     else:
         save_step_log = tempChangeInterval
 
-    print(f"Log save interval = {save_step_log}")
+    logger.info(f"Log save interval = {save_step_log}")
 
     save_check_steps = int(500.0 * unit.nanoseconds / dt)
-    print(f"Save checkpoint every {save_check_steps} steps")
+    logger.info(f"Save checkpoint every {save_check_steps} steps")
 
     temp_list = tools.compute_temperature_list(
         minTemperature=args.min_temp,
         maxTemperature=args.last_temp,
         numTemperatures=ladder_num,
         refTemperature=args.ref_temp)
+    
+    logger.info(f"Using temperatures : {', '.join([str(round(temp.in_units_of(unit.kelvin)._value, 2)) for temp in temp_list])}")
+    logger.info(f"- Launch SST1 simulation {temp_list}")
+
+
 
     run_sst1(
         sys_rest1,
@@ -300,8 +354,3 @@ if __name__ == "__main__":
         reportInterval=save_step_log,
         overwrite=False,
         save_checkpoint_steps=save_check_steps)
-
-"""
-vmd test_2HPL/2HPL_em_water.pdb test_2HPL/2HPL_equi_water.dcd -m 2HPL.pdb
-pbc wrap -molid 0 -first 0 -last last -compound fragment -center com -centersel "chain A and protein" -orthorhombic
-"""

@@ -135,7 +135,7 @@ if __name__ == "__main__":
 
     my_parser = parser_input()
     args = my_parser.parse_args()
-    
+
     logger.info(args)
     if args.verbose:
         logger.setLevel(logging.DEBUG)
@@ -287,20 +287,21 @@ if __name__ == "__main__":
     tot_steps = int(np.ceil(args.time * unit.nanoseconds / dt))
     save_step_dcd = 10000
     tempChangeInterval = int(args.temp_time / dt.in_units_of(unit.picosecond)._value)
-    print(f"Temperature change interval = {tempChangeInterval}")
+    logger.info(f"Temperature change interval = {tempChangeInterval}")
 
     if args.log_time is not None:
         save_step_log = int(args.log_time / dt.in_units_of(unit.picosecond)._value)
     else:
         save_step_log = tempChangeInterval
 
-    print(f"Log save interval = {save_step_log}")
+    logger.info(f"Log save interval = {save_step_log}")
 
     temp_list = tools.compute_temperature_list(
         minTemperature=args.min_temp,
         maxTemperature=args.last_temp,
         numTemperatures=ladder_num)
     
+    logger.info(f"Using temperatures : {', '.join([str(round(temp.in_units_of(unit.kelvin)._value, 2)) for temp in temp_list])}")
     logger.info(f"- Launch ST simulation {temp_list}")
 
     run_st(
