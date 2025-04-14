@@ -192,8 +192,11 @@ if __name__ == "__main__":
     # Get selection indices
     coor_init = pdb_numpy.Coor(f"{OUT_PATH}/{name}_water.pdb")
     solute_indices = coor_init.get_index_select(args.solute_sel)
+    all_indices = [int(i.index) for i in cif.topology.atoms()]
     assert len(solute_indices) > 0, "No solute atoms selected"
-    logger.info(f"- Select {len(solute_indices)} solute atoms")
+
+    logger.info(f"- Defining solute part containing {len(solute_indices)} atoms")
+    logger.info(f"- Defining solvent part containing {len(all_indices) - len(solute_indices)} atoms")
 
     integrator = LangevinMiddleIntegrator(temperature, friction, dt)
 

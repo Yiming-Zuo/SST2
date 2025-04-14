@@ -785,6 +785,15 @@ def compute_ladder_num(generic_name, min_temp, max_temp, sst2_score=False):
     sst2_score : bool, optional
         If True, use the SST2 score. The default is False.
     
+
+    Robert Denschlag, Martin Lingenheil, Paul Tavan,
+    Optimal temperature ladders in replica exchange simulations,
+    Chemical Physics Letters,
+    Volume 473, Issues 1–3,
+    2009,
+
+    $$ N = 1 + \frac{0.594 \sqrt{-E_{pot}}}{2 \cdot 0.534} \ln\left(\frac{T_{max}}{T_{min}}\right) $$
+
     Returns
     -------
     int
@@ -812,7 +821,7 @@ def compute_ladder_num(generic_name, min_temp, max_temp, sst2_score=False):
 
     # Extract potential energy
     if sst2_score:
-        logger.info("- Extract potential energy")
+        logger.info("- Extract SST2 potential energy")
         # SST1 case :
         if "Solute not scaled(kJ/mol)" in df_sim.columns:
             df_sim["Solute(kJ/mol)"] = (
@@ -827,6 +836,7 @@ def compute_ladder_num(generic_name, min_temp, max_temp, sst2_score=False):
         E_pot = df_sim["Potential Energy (kJ/mole)"].mean()
 
     logger.info(f"Average Epot = {E_pot:.2e} KJ.mol-1")
+    # TO CHECK
     E_pot *= 8.314462618e-3
     logger.info(f"Average Epot = {E_pot:.2e} Kb")
 

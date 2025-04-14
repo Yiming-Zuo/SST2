@@ -243,6 +243,10 @@ if __name__ == "__main__":
     all_indices = [int(i.index) for i in cif.topology.atoms()]
     solute_indices = [int(i.index) for i in cif.topology.atoms() if i.residue.chain.id in ['A']]
 
+    logger.info(f"- Defining solute part containing {len(solute_indices)} atoms")
+    logger.info(f"- Defining solvent part containing {len(all_indices) - len(solute_indices)} atoms")
+    
+
     integrator = LangevinMiddleIntegrator(temperature, friction, dt)
 
     system = tools.create_sim_system(cif,
