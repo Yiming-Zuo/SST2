@@ -346,6 +346,7 @@ def create_water_box(
 
     if not overwrite and os.path.isfile(out_cif):
         logger.info(f"File {out_cif} exists already, skip create_water_box() step")
+        cif = app.PDBxFile(out_cif)
         return cif
 
     # To avoid issue with clash with residues out of the box:
