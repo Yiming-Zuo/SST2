@@ -11,7 +11,7 @@ from io import StringIO
 import pdbfixer
 
 from openmm.app import PDBFile, PDBxFile, ForceField
-from openmm import LangevinMiddleIntegrator, unit
+from openmm import LangevinMiddleIntegrator, unit, NonbondedForce, app
 
 import pdb_numpy
 
@@ -120,6 +120,10 @@ def parser_input():
                         dest="solute_sel",
                         help='Solute selection, default=\"chain A\"',
                         default='chain A')
+    parser.add_argument('-nonbonded_PME',
+                        action="store_true",
+                        dest="nonbonded_PME",
+                        help='Use Particle Mesh Ewald for nonbonded interactions')
     parser.add_argument('-ff',
                         action="store",
                         dest="ff",
@@ -206,6 +210,40 @@ if __name__ == "__main__":
         h_mass=args.hmr,
         base_force_group=1)
 
+    charges = []
+    nonbonded = [f for f in system.getForces() if isinstance(f, NonbondedForce)][0]
+    for i in range(system.getNumParticles()):
+        charge, sigma, epsilon = nonbonded.getParticleParameters(i)
+        charges.append(charge)
+
+    tot_charge = sum([charge._value for charge in charges])
+    solute_charge = sum(
+        [charges[i]._value for i in range(len(charges)) if i in solute_indices]
+    )
+    logger.info(f"- Total charge of the system: {tot_charge:.1f}")
+    logger.info(f"- Total charge of the solute: {solute_charge:.1f}")
+
+    if abs(tot_charge) > 0.01:
+        logger.error(f"System is not neutral, charge = {tot_charge:.2f}. Please check the input structure.")
+
+    if abs(solute_charge) > 0.01 and args.nonbonded_PME:
+        logger.error(f"Solute is charged, charge = {solute_charge:.2f}."
+                     f"Using PME for nonbonded interactions is not recommended.\n"
+                     f"Remove the -nonbonded_PME flag with charge solute.\n")
+
+    if abs(solute_charge) < 0.01 and not args.nonbonded_PME:
+        logger.warning(f"Solute is not charged, charge = {solute_charge:.2f}."
+                       f"Using PME for nonbonded interactions is recommended.\n"
+                       f"Add the -nonbonded_PME flag with charge solute.\n")
+
+    if args.nonbonded_PME:
+        logger.info("Using PME for nonbonded interactions")
+        nonbondedMethod = app.PME
+    else:
+        logger.info("Using CutoffPeriodic for nonbonded interactions")
+        nonbondedMethod = app.CutoffPeriodic
+
+
     sys_rest2 = REST2(
         system=system,
         pdb=cif,
@@ -214,7 +252,8 @@ if __name__ == "__main__":
         integrator=integrator,
         dt=dt,
         temperature=temperature,
-        exclude_Pro_omegas=args.exclude_Pro_omega)
+        exclude_Pro_omegas=args.exclude_Pro_omega,
+        nonbondedMethod=nonbondedMethod,)
 
     logger.info(f"- Minimize system")
     tools.minimize(

@@ -46,8 +46,8 @@ class SST1Reporter(object):
         return (steps, False, isUpdateAttempt, False, isUpdateAttempt)
 
     def report(self, simulation, state):
-        #energie_group = self.sst1.rest1.compute_all_energies()
-        ener_solut, ener_solv, ener_solut_solv  = self.sst1.rest1.compute_all_energies()
+        # energie_group = self.sst1.rest1.compute_all_energies()
+        ener_solut, ener_solv, ener_solut_solv = self.sst1.rest1.compute_all_energies()
         # energie = st.rest1.get_customPotEnergie()
         # E = Bi*Epp + (B0Bi)**0.5 Epw
         # print(energie_group)
@@ -231,11 +231,13 @@ class SST1(object):
         # print(self.temperatures[self.currentTemperature])
         # self.simulation.integrator.setTemperature(self.temperatures[self.currentTemperature])
         self.rest1.scale_nonbonded_bonded(
-            self.temperatures[self.currentTemperature] /
-            self.temperatures[self.temp_ref_index]
+            self.temperatures[self.currentTemperature]
+            / self.temperatures[self.temp_ref_index]
         )
 
-        self.simulation.integrator.setTemperature(self.temperatures[self.currentTemperature])
+        self.simulation.integrator.setTemperature(
+            self.temperatures[self.currentTemperature]
+        )
 
         # Add a reporter to the simulation which will handle the updates and reports.
         self.simulation.reporters.append(SST1Reporter(self))
@@ -308,14 +310,12 @@ class SST1(object):
                 df_local = df_temp[df_temp["Aim Temp (K)"] == temp]
                 self._e_num[temp_index] = len(df_local)
                 self._e_solute_avg[temp_index] = (
-                    df_local["E solute (kJ/mole)"].mean()
-                    * unit.kilojoules_per_mole
+                    df_local["E solute (kJ/mole)"].mean() * unit.kilojoules_per_mole
                 )
                 self._e_solute_solv_avg[temp_index] = (
                     df_local["E solvent-solute (kJ/mole)"].mean()
                     * unit.kilojoules_per_mole
                 )
-
 
             first_temp_index = 0
             for index, row in df_sim.iloc[::-1].iterrows():
@@ -442,18 +442,21 @@ class SST1(object):
                 self.currentTemperature = temp_list[i]
                 # self.simulation.integrator.setTemperature(self.temperatures[i])
                 self.rest1.scale_nonbonded_bonded(
-                    self.temperatures[temp_list[i]] / self.temperatures[self.temp_ref_index]
+                    self.temperatures[temp_list[i]]
+                    / self.temperatures[self.temp_ref_index]
                 )
 
                 scale = (
                     self.temperatures[self.temp_ref_index]
-                        / self.temperatures[self.currentTemperature]
+                    / self.temperatures[self.currentTemperature]
                 ) ** 0.5
                 velocities = scale * state.getVelocities(asNumpy=True).value_in_unit(
                     unit.nanometers / unit.picoseconds
                 )
                 self.simulation.context.setVelocities(velocities)
-                self.simulation.integrator.setTemperature(self.temperatures[self.currentTemperature])
+                self.simulation.integrator.setTemperature(
+                    self.temperatures[self.currentTemperature]
+                )
 
                 break
 

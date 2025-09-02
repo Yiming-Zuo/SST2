@@ -16,14 +16,31 @@ import openmm.app as app
 
 # Test to launch directly the script
 try:
-    from .tools import setup_simulation, create_system_simulation, get_forces, simulate
+    from .tools import (
+        setup_simulation,
+        create_system_simulation,
+        get_forces,
+        simulate,
+        print_forces,
+        create_custom_nonbonded_force_rf,
+        create_custom_bonded_force_rf,
+    )
     from .topology import get_subset
 except ImportError:
-    from tools import setup_simulation, create_system_simulation, get_forces, simulate
+    from tools import (
+        setup_simulation,
+        create_system_simulation,
+        get_forces,
+        simulate,
+        print_forces,
+        create_custom_nonbonded_force_rf,
+        create_custom_bonded_force_rf,
+    )
     from topology import get_subset
 
 # Logging
 logger = logging.getLogger(__name__)
+
 
 class Rest2Reporter(object):
     """Reporter for REST2 simulation
@@ -269,18 +286,47 @@ class REST2:
         # Separate solute torsion from the solvent
         self.separate_torsion_pot(exclude_Pro_omegas=exclude_Pro_omegas)
         # Create separate solute and solvent simulation
-        self.create_solute_solvent_simulation(
-            forcefield=forcefield,
-            platform_name=platform_name,
-            nonbondedMethod=nonbondedMethod,
-            nonbondedCutoff=nonbondedCutoff,
-            constraints=constraints,
-            rigidWater=rigidWater,
-            ewaldErrorTolerance=ewaldErrorTolerance,
-            hydrogenMass=hydrogenMass,
-            friction=friction,
-            dt=dt,
-        )
+
+        if nonbondedMethod == app.PME:
+            logger.info("Create systems with PME")
+            self.reaction_field = False
+
+            self.create_solute_solvent_simulation(
+                forcefield=forcefield,
+                platform_name=platform_name,
+                nonbondedMethod=nonbondedMethod,
+                nonbondedCutoff=nonbondedCutoff,
+                constraints=constraints,
+                rigidWater=rigidWater,
+                ewaldErrorTolerance=ewaldErrorTolerance,
+                hydrogenMass=hydrogenMass,
+                friction=friction,
+                dt=dt,
+            )
+
+        elif nonbondedMethod == app.CutoffPeriodic:
+            # To avoid issues with charged solute and PME,
+            # we create a copy of the system with CutoffPeriodic for electrostatics
+            # and compute the solute-solvent interactions with this system
+            # with Reaction Field
+            logger.info("Create systems with Reaction Field")
+            self.reaction_field = True
+
+            self.create_rf_simulation(
+                forcefield=forcefield,
+                platform_name=platform_name,
+                nonbondedMethod=nonbondedMethod,
+                nonbondedCutoff=nonbondedCutoff,
+                constraints=constraints,
+                rigidWater=rigidWater,
+                ewaldErrorTolerance=ewaldErrorTolerance,
+                hydrogenMass=hydrogenMass,
+                friction=friction,
+                dt=dt,
+            )
+        else:
+            raise ValueError("nonbondedMethod not supported")
+
         # Extract solute nonbonded index and values from the solute_only system
         self.find_nb_solute_system()
         self.setup_simulation(
@@ -293,7 +339,7 @@ class REST2:
 
     def find_solute_nb_index(self):
         """Extract initial solute nonbonded indexes and values (charge, sigma, epsilon).
-        Extract also excclusion indexes and values (chargeprod, sigma, epsilon)
+        Extract also exclusion indexes and values (chargeprod, sigma, epsilon)
 
         Parameters
         ----------
@@ -333,7 +379,6 @@ class REST2:
                     [iatom, jatom, chargeprod, sigma, epsilon]
                 )
 
-
     def separate_cmap_pot(self):
         """
         CMAP potential is separate in two groups:
@@ -368,8 +413,12 @@ class REST2:
 
         for i in range(original_cmap_force.getNumTorsions()):
             cmap_indexes = original_cmap_force.getTorsionParameters(i)
-            solute_in = all([cmap_indexes[j+1] in self.solute_index for j in range(8)])
-            solvent_in = all([cmap_indexes[j+1] in self.solvent_index for j in range(8)])
+            solute_in = all(
+                [cmap_indexes[j + 1] in self.solute_index for j in range(8)]
+            )
+            solvent_in = all(
+                [cmap_indexes[j + 1] in self.solvent_index for j in range(8)]
+            )
 
             if solvent_in:
                 # logger.info(f"Add CMap torsion {i} in solvent")
@@ -379,7 +428,7 @@ class REST2:
                 solute_cmap_force.addTorsion(*cmap_indexes)
             else:
                 raise ValueError("CMap not in solute or solvent")
-            
+
         logger.info("- Add new CMAP Forces")
         self.system.addForce(solute_cmap_force)
         self.system.addForce(solvent_cmap_force)
@@ -396,7 +445,6 @@ class REST2:
                 logger.info(f"Remove CMAP Force {count}")
                 self.system.removeForce(count)
                 break
-
 
     def separate_torsion_pot(self, exclude_Pro_omegas=False):
         """Use in the REST2 case as it avoid to modify
@@ -465,7 +513,6 @@ class REST2:
         torsion_index = 0
         self.init_torsions_index = []
         self.init_torsions_value = []
-
 
         for i in range(original_torsion_force.getNumTorsions()):
             (
@@ -588,25 +635,22 @@ class REST2:
 
         # print(self.positions)
         # print(self.solvent_index)
-        solvent_top, solvent_pos = get_subset(self.topology, self.positions, keep=self.solvent_index, types="atom")
-        # print(len(solvent_pos), len([self.positions[i] for i in self.solvent_index]))
-        app.PDBFile.writeFile(
-            solvent_top, solvent_pos,
-            solvent_stdout, True
+        solvent_top, solvent_pos = get_subset(
+            self.topology, self.positions, keep=self.solvent_index, types="atom"
         )
+        # print(len(solvent_pos), len([self.positions[i] for i in self.solvent_index]))
+        app.PDBFile.writeFile(solvent_top, solvent_pos, solvent_stdout, True)
         # app.PDBFile.writeFile(
         #     solvent_top, solvent_pos,
         #     'tmp_solvent.pdb', True
         # )
 
         # Need to use the get_subset function because of small molecule issue related
-        solute_top, solute_pos = get_subset(self.topology, self.positions, keep=self.solute_index, types="atom")
-
-        app.PDBFile.writeFile(
-            solute_top,
-            solute_pos,
-            solute_stdout, True
+        solute_top, solute_pos = get_subset(
+            self.topology, self.positions, keep=self.solute_index, types="atom"
         )
+
+        app.PDBFile.writeFile(solute_top, solute_pos, solute_stdout, True)
         # app.PDBFile.writeFile(
         #     solute_top,
         #     solute_pos,
@@ -652,6 +696,184 @@ class REST2:
             type(force).__name__: force for force in self.system_solvent.getForces()
         }
 
+    def create_rf_simulation(
+        self,
+        forcefield,
+        nonbondedMethod=app.CutoffPeriodic,
+        nonbondedCutoff=1 * unit.nanometers,
+        constraints=app.HBonds,
+        platform_name="CUDA",
+        temperature=300 * unit.kelvin,
+        rigidWater=True,
+        ewaldErrorTolerance=0.0005,
+        hydrogenMass=1.0 * unit.amu,
+        friction=1 / unit.picoseconds,
+        dt=2 * unit.femtosecond,
+    ):
+        """Extract solute only and solvent only coordinates.
+        A sytem and a simulation is then created for both systems.
+
+        Parameters
+        ----------
+        forcefield : str
+            Forcefield name
+        nonbondedMethod : Nonbonded Method
+            Nonbonded method, default is app.PME
+        nonbondedCutoff : float * unit.nanometers
+            Nonbonded cutoff
+        constraints : Constraints
+            Constraints
+        platform_name : str
+            Platform name, default is CUDA
+        rigidWater : bool
+            Rigid water, default is True
+        ewaldErrorTolerance : float
+            Ewald error tolerance, default is 0.0005
+        hydrogenMass : float * unit.amu
+            Hydrogen mass, default is 1.0 * unit.amu
+        friction : float / unit.picoseconds
+            Friction, default is 1 / unit.picoseconds
+        dt : float * unit.femtosecond
+            Time step, default is 2 * unit.femtosecond
+
+        """
+
+        # Save pdb coordinates to read them with pdb_numpy
+
+        # Redirect stdout in the variable new_stdout:
+        old_stdout = sys.stdout
+        all_stdout = StringIO()
+        # In case of dummy atoms (position restraints, ...)
+        # It has to be removed from pdb files
+        # top_num_atom = self.topology.getNumAtoms()
+
+        all_top, all_pos = get_subset(self.topology, self.positions, types="atom")
+        app.PDBFile.writeFile(all_top, all_pos, all_stdout, True)
+
+
+        logger.info("- Create System with Reaction Field for non bonded electrostatic.")
+
+
+        pdb = app.PDBFile(StringIO(all_stdout.getvalue()))
+
+        integrator = openmm.LangevinMiddleIntegrator(temperature, friction, dt)
+
+        self.system_rf = forcefield.createSystem(
+            pdb.topology,
+            nonbondedMethod=nonbondedMethod,
+            nonbondedCutoff=nonbondedCutoff,
+            constraints=constraints,
+            rigidWater=rigidWater,
+            ewaldErrorTolerance=ewaldErrorTolerance,
+            hydrogenMass=hydrogenMass,
+        )
+
+
+        for force in self.system_rf.getForces():
+            if isinstance(force, openmm.NonbondedForce):
+                original_nonbonded_force = force
+                break
+
+        # Solvent Solvent interactions
+        # custom_nonbonded_force_ww = create_custom_nonbonded_force_rf(
+        #     original_nonbonded_force, [[self.solvent_index, self.solvent_index]]
+        # )
+        # custom_nonbonded_force_ww.setForceGroup(5)
+        # custom_nonbonded_force_ww.setName("Nonbonded_ww")
+
+        # custom_bonded_force_ww = create_custom_bonded_force_rf(
+        #     original_nonbonded_force, [self.solvent_index, self.solvent_index]
+        # )
+        # custom_bonded_force_ww.setForceGroup(6)
+        # custom_bonded_force_ww.setName("Bonded_ww")
+
+        # # Add the custom forces to the system
+        # self.system_rf.addForce(custom_nonbonded_force_ww)
+        # self.system_rf.addForce(custom_bonded_force_ww)
+
+        # Solute Solute
+
+        custom_nonbonded_force_pp = create_custom_nonbonded_force_rf(
+            original_nonbonded_force, [[self.solute_index, self.solute_index]]
+        )
+        custom_nonbonded_force_pp.setForceGroup(7)
+        custom_nonbonded_force_pp.setName("Nonbonded_pp")
+
+        custom_bonded_force_pp = create_custom_bonded_force_rf(
+            original_nonbonded_force, [self.solute_index, self.solute_index]
+        )
+        custom_bonded_force_pp.setForceGroup(8)
+        custom_bonded_force_pp.setName("Bonded_pp")
+
+        self.system_rf.addForce(custom_nonbonded_force_pp)
+        self.system_rf.addForce(custom_bonded_force_pp)
+
+        # Solvent Solute
+
+        custom_nonbonded_force_wp = create_custom_nonbonded_force_rf(
+            original_nonbonded_force, [[self.solvent_index, self.solute_index]]
+        )
+        custom_nonbonded_force_wp.setForceGroup(9)
+        custom_nonbonded_force_wp.setName("Nonbonded_wp")
+
+        custom_bonded_force_wp = create_custom_bonded_force_rf(
+            original_nonbonded_force, [self.solvent_index, self.solute_index]
+        )
+        custom_bonded_force_wp.setForceGroup(10)
+        custom_bonded_force_wp.setName("Bonded_wp")
+
+        self.system_rf.addForce(custom_nonbonded_force_wp)
+        self.system_rf.addForce(custom_bonded_force_wp)
+
+        # logger.info("- Delete the original NonbondedForce.")
+        # for count, force in enumerate(self.system_rf.getForces()):
+        #     if isinstance(force, openmm.NonbondedForce):
+        #         self.system_rf.removeForce(count)
+        #         break
+
+        # Create the simulation
+        self.simulation_rf = setup_simulation(
+            self.system_rf, pdb.positions, pdb.topology, integrator, platform_name
+        )
+
+
+        
+
+        self.system_forces_rf = {
+            type(force).__name__: force for force in self.system_rf.getForces()
+        }
+        
+
+        # Need to use the get_subset function because of small molecule issue related
+        # solute_stdout = StringIO()
+        # solute_top, solute_pos = get_subset(
+        #     self.topology, self.positions, keep=self.solute_index, types="atom"
+        # )
+
+        # app.PDBFile.writeFile(solute_top, solute_pos, solute_stdout, True)
+
+        # self.system_solute, self.simulation_solute = create_system_simulation(
+        #     StringIO(solute_stdout.getvalue()),
+        #     cif_format=False,
+        #     forcefield=forcefield,
+        #     nonbondedMethod=nonbondedMethod,
+        #     nonbondedCutoff=nonbondedCutoff,
+        #     constraints=constraints,
+        #     platform_name=platform_name,
+        #     rigidWater=rigidWater,
+        #     ewaldErrorTolerance=ewaldErrorTolerance,
+        #     hydrogenMass=hydrogenMass,
+        #     friction=friction,
+        #     dt=dt,
+        # )
+        # self.system_forces_solute = {
+        #     type(force).__name__: force for force in self.system_solute.getForces()
+        # }
+
+        sys.stdout = old_stdout
+
+
+
     def find_nb_solute_system(self):
         """Extract in the solute only system:
         - exeption indexes and values (chargeprod, sigma, epsilon)
@@ -662,7 +884,10 @@ class REST2:
         Exception values are stored as indexes [iatom, jatom] are different.
         """
 
-        nonbonded_force = self.system_forces_solute["NonbondedForce"]
+        if self.reaction_field:
+            nonbonded_force = self.system_forces_rf["NonbondedForce"]
+        else:
+            nonbonded_force = self.system_forces_solute["NonbondedForce"]
 
         # Copy particles
         self.init_nb_exept_solute_value = []
@@ -735,17 +960,43 @@ class REST2:
         tot_positions = sim_state.getPositions(asNumpy=True)
         box_vector = sim_state.getPeriodicBoxVectors()
 
-        self.simulation_solute.context.setPeriodicBoxVectors(*box_vector)
-        self.simulation_solute.context.setPositions(tot_positions[self.solute_index])
+        if self.reaction_field:
+            self.simulation_rf.context.setPeriodicBoxVectors(*box_vector)
+            self.simulation_rf.context.setPositions(tot_positions)
+            forces_rf = get_forces(self.system_rf, self.simulation_rf)
+            forces_all = get_forces(self.system, self.simulation)
 
-        forces_solute = get_forces(self.system_solute, self.simulation_solute)
+            # print("Reaction Field Forces")
+            # print_forces(self.system_rf, self.simulation_rf)
+            # print("All Forces")
+            # print_forces(self.system, self.simulation)
+            # print('Solute forces')
+            # print_forces(self.system_solute, self.simulation_solute)
 
-        self.simulation_solvent.context.setPeriodicBoxVectors(*box_vector)
-        self.simulation_solvent.context.setPositions(tot_positions[self.solvent_index])
+            return (None, forces_rf, forces_all)
+        
+        else:
 
-        forces_solvent = get_forces(self.system_solvent, self.simulation_solvent)
+            self.simulation_solute.context.setPeriodicBoxVectors(*box_vector)
+            self.simulation_solute.context.setPositions(tot_positions[self.solute_index])
 
-        return (forces_solute, forces_solvent)
+            forces_solute = get_forces(self.system_solute, self.simulation_solute)
+
+            self.simulation_solvent.context.setPeriodicBoxVectors(*box_vector)
+            self.simulation_solvent.context.setPositions(tot_positions[self.solvent_index])
+
+            forces_solvent = get_forces(self.system_solvent, self.simulation_solvent)
+
+            forces_all = get_forces(self.system, self.simulation)
+
+            # print("Solute Forces")
+            # print_forces(self.system_solute, self.simulation_solute)
+            # print("Solvent Forces")
+            # print_forces(self.system_solvent, self.simulation_solvent)
+            # print("All Forces")
+            # print_forces(self.system, self.simulation)
+
+            return (forces_solute, forces_solvent, forces_all)
 
     def update_torsions(self, scale):
         """Scale system solute torsion by a scale factor."""
@@ -766,9 +1017,7 @@ class REST2:
         cmap_force = self.solute_cmap_force
 
         for i, map in enumerate(self.cmap_force_map):
-            cmap_force.setMapParameters(
-                i, map[0], map[1] * scale
-            )
+            cmap_force.setMapParameters(i, map[0], map[1] * scale)
 
         cmap_force.updateParametersInContext(self.simulation.context)
 
@@ -802,6 +1051,61 @@ class REST2:
 
         # Need to fix simulation
         nonbonded_force.updateParametersInContext(self.simulation.context)
+
+    def update_nonbonded_reaction_field(self, scale):
+        """Scale system nonbonded interaction:
+        - LJ epsilon by `scale`
+        - Coulomb charges by `sqrt(scale)`
+        - charge product is scaled by `scale`
+        """
+
+        # print_forces(self.system_all, self.simulation_all)
+
+        nonbonded_force = self.system_forces_rf["NonbondedForce"]
+
+        # for i in self.solute_index:
+        #     q, sigma, eps = self.init_nb_param[i]
+        #     nonbonded_force.setParticleParameters(
+        #         i, q * np.sqrt(scale), sigma, eps * scale
+        #     )
+
+        # for i in range(len(self.init_nb_exept_index)):
+        #     index = self.init_nb_exept_index[i]
+        #     p1, p2, q, sigma, eps = self.init_nb_exept_value[i]
+        #     # In ExceptionParameters, q is the charge product.
+        #     # To scale particle charges by `np.sqrt(scale)`
+        #     # is equivalent to scale the product by `scale`
+        #     # As for eps, eps(i,j) = sqrt(eps(i)*eps(j))
+        #     # if we scale eps(i) and eps(j) by `scale`
+        #     # we aslo scale eps(i,j) by `scale`.
+        #     nonbonded_force.setExceptionParameters(
+        #         index, p1, p2, q * scale, sigma, eps * scale
+        #     )
+
+        # # Need to fix simulation
+        # nonbonded_force.updateParametersInContext(self.simulation_all.context)
+
+        
+        for i in self.solute_index:
+            q, sigma, eps = self.init_nb_param[i]
+            nonbonded_force.setParticleParameters(
+                i, q * np.sqrt(scale), sigma, eps * scale
+            )
+
+        # for i in self.solute_index:
+        #     p1, p2, q, sigma, eps = self.init_nb_exept_value[i]
+        #     # In ExceptionParameters, q is the charge product.
+        #     # To scale particle charges by `np.sqrt(scale)`
+        #     # is equivalent to scale the product by `scale`
+        #     # As for eps, eps(i,j) = sqrt(eps(i)*eps(j))
+        #     # if we scale eps(i) and eps(j) by `scale`
+        #     # we aslo scale eps(i,j) by `scale`.
+        #     nonbonded_force.setExceptionParameters(
+        #         index, p1, p2, q * scale, sigma, eps * scale
+        #     )
+
+        # Need to fix simulation
+        nonbonded_force.updateParametersInContext(self.simulation_rf.context)
 
     def update_nonbonded_solute(self, scale):
         """Scale solute only system nonbonded interaction:
@@ -867,14 +1171,62 @@ class REST2:
         if self.CMAP_flag:
             self.update_cmap(scale)
         self.update_nonbonded(scale)
-        self.update_nonbonded_solute(scale)
+        if self.reaction_field:
+            self.update_nonbonded_reaction_field(scale)
+        else:
+            self.update_nonbonded_solute(scale)
         self.update_torsions(scale)
 
     def compute_all_energies(self):
         """Extract solute potential energy and solute-solvent interactions."""
 
-        solute_force, solvent_force = self.compute_solute_solvent_system_energy()
 
+        # print("System Forces:")
+        # print_forces(self.system, self.simulation)
+        # print("System RF Forces:")
+        # print_forces(self.system_rf, self.simulation_rf)
+
+        if self.reaction_field:
+
+            _, rf_force, system_force = (
+                self.compute_solute_solvent_system_energy()
+            )
+            for i, force in rf_force.items():
+                if force["name"] == "Nonbonded_wp":
+                    nonbonded_rf_wp = force["energy"]
+                elif force["name"] == "Bonded_wp":
+                    bonded_rf_wp = force["energy"]
+                elif force["name"] == "Nonbonded_pp":
+                    nonbonded_rf_pp = force["energy"]
+                elif force["name"] == "Bonded_pp":
+                    bonded_rf_pp = force["energy"]
+            
+            E_solute_scaled = 0 * unit.kilojoules_per_mole
+            E_solute_scaled += nonbonded_rf_pp + bonded_rf_pp
+
+
+            for i, force in system_force.items():
+                # Only the first CustomTorsionForce is the scaled solute one
+                if force["name"] == "CustomTorsionForce":
+                    # print(f"Add {force['name']} energy to E_solute_scaled = {force['energy']}")
+                    E_solute_scaled += force["energy"]
+                    break
+
+            solvent_solute_nb = nonbonded_rf_wp + bonded_rf_wp  
+
+            # print(f"E_solute_scaled: {E_solute_scaled}")
+            # print(f"solvent_solute_nb: {solvent_solute_nb}")
+
+            return (
+                (1 / self.scale) * E_solute_scaled,
+                0 * unit.kilojoules_per_mole, # Not computed here
+                0 * unit.kilojoules_per_mole, # Not computed here
+                (1 / self.scale) ** 0.5 * solvent_solute_nb,
+            )
+
+        solute_force, solvent_force, system_force = (
+            self.compute_solute_solvent_system_energy()
+        )
         E_solute_not_scaled = 0 * unit.kilojoules_per_mole
         E_solute_scaled = 0 * unit.kilojoules_per_mole
         solute_not_scaled_term = ["HarmonicBondForce", "HarmonicAngleForce"]
@@ -899,7 +1251,7 @@ class REST2:
             if force["name"] in solvent_term:
                 E_solvent += force["energy"]
 
-        system_force = get_forces(self.system, self.simulation)
+        # system_force = get_forces(self.system, self.simulation)
 
         solute_torsion_scaled_flag = True
         solute_torsion_not_scaled_flag = False
@@ -924,12 +1276,17 @@ class REST2:
             ):
                 E_solute_not_scaled += force["energy"]
                 solute_torsion_not_scaled_flag = False
+            # else:
+            #     print(force["name"], " is not treated")
 
         # Non scaled solvent-solute_non bonded:
         solvent_solute_nb = all_nb - solute_nb - solvent_nb
         # Scaled non bonded
         # solvent_solute_nb *= (1 / self.scale)**0.5
         # solute_nb *= 1 / self.scale
+
+        # print(f"E_solute_scaled: {E_solute_scaled}")
+        # print(f"solvent_solute_nb: {solvent_solute_nb}")
 
         return (
             (1 / self.scale) * E_solute_scaled,
@@ -1130,12 +1487,11 @@ if __name__ == "__main__":
     if not logger.hasHandlers():
         handler = logging.StreamHandler(sys.stdout)
         handler.setLevel(logging.INFO)
-        formatter = logging.Formatter('%(name)s - %(levelname)s - %(message)s')
+        formatter = logging.Formatter("%(name)s - %(levelname)s - %(message)s")
         handler.setFormatter(formatter)
         logger.addHandler(handler)
 
     # Whole system:
-    OUT_PATH = "/mnt/Data_3/SST2_clean/tmp"
     name = "2HPL"
     charmm_use = False
 
@@ -1269,7 +1625,17 @@ if __name__ == "__main__":
 
     integrator_rest = openmm.LangevinMiddleIntegrator(temperature, friction, dt)
 
-    test = REST2(system, pdb, forcefield, solute_indices, integrator_rest)
+    # nonbondedMethod = app.PME
+    nonbondedMethod = app.CutoffPeriodic
+
+    test = REST2(
+        system,
+        pdb,
+        forcefield,
+        solute_indices,
+        integrator_rest,
+        nonbondedMethod=nonbondedMethod,
+    )
 
     print("REST2 forces 300K:")
     tools.print_forces(test.system, test.simulation)
@@ -1353,7 +1719,7 @@ if __name__ == "__main__":
     solute_scaled_force = forces_rest2[4]["energy"] + forces_pep[1]["energy"]
     print(f"E_solute_scaled      {solute_scaled_force/E_solute_scaled:.5e}")
     solute_not_scaled_force = (
-        forces_rest2[5]["energy"] + forces_pep[0]["energy"] +forces_pep[4]["energy"]
+        forces_rest2[5]["energy"] + forces_pep[0]["energy"] + forces_pep[4]["energy"]
     )
     print(f"E_solute_not_scaled  {solute_not_scaled_force/E_solute_not_scaled:.5e}")
 

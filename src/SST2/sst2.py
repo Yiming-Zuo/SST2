@@ -435,9 +435,9 @@ class SST2(object):
         # to compute p(i)
         index_list = list(range(len(temp_list)))
         random.shuffle(index_list)
+        r = random.random()
 
         for i in index_list:
-            r = random.random()
 
             if r < probability[i]:
                 # print(f"SWITCH {self.currentTemperature:2} -> {temp_list[i]:2}")

@@ -17,6 +17,7 @@ import pdbfixer
 # Logging
 logger = logging.getLogger(__name__)
 
+
 def get_forcefield(forcefield_name, water_model):
     """Create the forcefield object from the forcefield name.
 
@@ -37,77 +38,82 @@ def get_forcefield(forcefield_name, water_model):
 
     forcefield_files = []
 
-    if forcefield_name == 'amber14sb':
+    if forcefield_name == "amber14sb":
 
-        forcefield_files.append('amber14/protein.ff14SB.xml')
+        forcefield_files.append("amber14/protein.ff14SB.xml")
 
-        if water_model == 'tip3p':
-            forcefield_files.append('amber14/tip3p.xml')
-        elif water_model == 'tip3pfb':
-            forcefield_files.append('amber14/tip3pfb.xml')
-        elif water_model == 'tip4pew':
-            forcefield_files.append('amber14/tip4pew.xml')
-        elif water_model == 'tip4pfb':
-            forcefield_files.append('amber14/tip4pfb.xml')
-        elif water_model == 'spce':
-            forcefield_files.append('amber14/spce.xml')
-        elif water_model == 'opc':
-            forcefield_files.append('amber14/opc.xml')
+        if water_model == "tip3p":
+            forcefield_files.append("amber14/tip3p.xml")
+        elif water_model == "tip3pfb":
+            forcefield_files.append("amber14/tip3pfb.xml")
+        elif water_model == "tip4pew":
+            forcefield_files.append("amber14/tip4pew.xml")
+        elif water_model == "tip4pfb":
+            forcefield_files.append("amber14/tip4pfb.xml")
+        elif water_model == "spce":
+            forcefield_files.append("amber14/spce.xml")
+        elif water_model == "opc":
+            forcefield_files.append("amber14/opc.xml")
         else:
-            raise ValueError(f"Water Forcefield {water_model} not recognized with {forcefield_name}")
-        
-        return(app.ForceField(*forcefield_files))
+            raise ValueError(
+                f"Water Forcefield {water_model} not recognized with {forcefield_name}"
+            )
 
-    elif forcefield_name in ['amber99sbildn', 'amber99sbnmr']:
+        return app.ForceField(*forcefield_files)
 
-        if forcefield_name == 'amber99sbildn':
-            forcefield_files.append('amber99sbildn.xml')
-        if forcefield_name == 'amber99sbnmr':
-            forcefield_files.append('amber99sbnm.xml')
+    elif forcefield_name in ["amber99sbildn", "amber99sbnmr"]:
 
-        if water_model == 'tip3p':
-            forcefield_files.append('tip3p.xml')
-        elif water_model == 'tip3pfb':
-            forcefield_files.append('tip3pfb.xml')
-        elif water_model == 'tip4pew':
-            forcefield_files.append('tip4pew.xml')
-        elif water_model == 'tip4pfb':
-            forcefield_files.append('tip4pfb.xml')
-        elif water_model == 'spce':
-            forcefield_files.append('spce.xml')
-        elif water_model == 'opc':
-            forcefield_files.append('opc.xml')
+        if forcefield_name == "amber99sbildn":
+            forcefield_files.append("amber99sbildn.xml")
+        if forcefield_name == "amber99sbnmr":
+            forcefield_files.append("amber99sbnm.xml")
+
+        if water_model == "tip3p":
+            forcefield_files.append("tip3p.xml")
+        elif water_model == "tip3pfb":
+            forcefield_files.append("tip3pfb.xml")
+        elif water_model == "tip4pew":
+            forcefield_files.append("tip4pew.xml")
+        elif water_model == "tip4pfb":
+            forcefield_files.append("tip4pfb.xml")
+        elif water_model == "spce":
+            forcefield_files.append("spce.xml")
+        elif water_model == "opc":
+            forcefield_files.append("opc.xml")
         else:
-            raise ValueError(f"Water Forcefield {water_model} not recognized with {forcefield_name}")
-        
-        return(app.ForceField(*forcefield_files))
+            raise ValueError(
+                f"Water Forcefield {water_model} not recognized with {forcefield_name}"
+            )
 
+        return app.ForceField(*forcefield_files)
 
-    elif forcefield_name == 'charmm36':
+    elif forcefield_name == "charmm36":
 
-        forcefield_files.append('charmm36.xml')
+        forcefield_files.append("charmm36.xml")
 
-        if water_model == 'tip3':
-            forcefield_files.append('charmm36/water.xml')
-        elif water_model == 'spce':
-            forcefield_files.append('charmm36/spce.xml')
-        elif water_model == 'tip3p-pme-b':
-            forcefield_files.append('charmm36/tip3p-pme-b.xml')
-        elif water_model == 'tip3p-pme-f':
-            forcefield_files.append('charmm36/tip3p-pme-f.xml')
-        elif water_model == 'tip4p2005':
-            forcefield_files.append('charmm36/tip4p2005.xml')
-        elif water_model == 'tip4pew':
-            forcefield_files.append('charmm36/tip4pew.xml')
-        elif water_model == 'tip5p':
-            forcefield_files.append('charmm36/tip5p.xml')
-        elif water_model == 'tip5pew':
-            forcefield_files.append('charmm36/tip5pew.xml')
+        if water_model == "tip3":
+            forcefield_files.append("charmm36/water.xml")
+        elif water_model == "spce":
+            forcefield_files.append("charmm36/spce.xml")
+        elif water_model == "tip3p-pme-b":
+            forcefield_files.append("charmm36/tip3p-pme-b.xml")
+        elif water_model == "tip3p-pme-f":
+            forcefield_files.append("charmm36/tip3p-pme-f.xml")
+        elif water_model == "tip4p2005":
+            forcefield_files.append("charmm36/tip4p2005.xml")
+        elif water_model == "tip4pew":
+            forcefield_files.append("charmm36/tip4pew.xml")
+        elif water_model == "tip5p":
+            forcefield_files.append("charmm36/tip5p.xml")
+        elif water_model == "tip5pew":
+            forcefield_files.append("charmm36/tip5pew.xml")
         else:
-            raise ValueError(f"Water Forcefield {water_model} not recognized with {forcefield_name}")
-        
-        return(app.ForceField(*forcefield_files))
-    
+            raise ValueError(
+                f"Water Forcefield {water_model} not recognized with {forcefield_name}"
+            )
+
+        return app.ForceField(*forcefield_files)
+
     else:
         raise ValueError(f"Forcefield {forcefield_name} not recognized")
 
@@ -166,7 +172,7 @@ def prepare_pdb(in_pdb, out_cif, pH=7.0, overwrite=False):
     fixer.findMissingResidues()
     fixer.findNonstandardResidues()
     fixer.replaceNonstandardResidues()
-    #fixer.removeHeterogens(False)
+    # fixer.removeHeterogens(False)
     fixer.findMissingAtoms()
     fixer.addMissingAtoms()
     fixer.addMissingHydrogens(pH)
@@ -350,15 +356,20 @@ def create_water_box(
         return cif
 
     # To avoid issue with clash with residues out of the box:
-    x_min = min([0*unit.nanometer] + [pos[0] for pos in cif.positions])
-    y_min = min([0*unit.nanometer] + [pos[1] for pos in cif.positions])
-    z_min = min([0*unit.nanometer] + [pos[2] for pos in cif.positions])
-    min_vec = openmm.Vec3(
-        x_min.value_in_unit(unit.nanometer),
-        y_min.value_in_unit(unit.nanometer),
-        z_min.value_in_unit(unit.nanometer)) * unit.nanometer
-    cif.positions = [ (pos - min_vec).value_in_unit(unit.nanometer) for pos in cif.positions] * unit.nanometer
-
+    x_min = min([0 * unit.nanometer] + [pos[0] for pos in cif.positions])
+    y_min = min([0 * unit.nanometer] + [pos[1] for pos in cif.positions])
+    z_min = min([0 * unit.nanometer] + [pos[2] for pos in cif.positions])
+    min_vec = (
+        openmm.Vec3(
+            x_min.value_in_unit(unit.nanometer),
+            y_min.value_in_unit(unit.nanometer),
+            z_min.value_in_unit(unit.nanometer),
+        )
+        * unit.nanometer
+    )
+    cif.positions = [
+        (pos - min_vec).value_in_unit(unit.nanometer) for pos in cif.positions
+    ] * unit.nanometer
 
     modeller = app.Modeller(cif.topology, cif.positions)
 
@@ -378,7 +389,9 @@ def create_water_box(
         boxVectors = [(maxSize + pad) * v for v in vectors]
     else:
         boxVectors = [vec * v for v in vectors]
-    logger.info(f'- Adding solvent with a {boxVectors[0][0].value_in_unit(unit.nanometer):.3} nm size box')
+    logger.info(
+        f"- Adding solvent with a {boxVectors[0][0].value_in_unit(unit.nanometer):.3} nm size box"
+    )
 
     modeller.addSolvent(
         forcefield,
@@ -389,10 +402,8 @@ def create_water_box(
     )
 
     app.PDBxFile.writeFile(
-        modeller.topology,
-        modeller.positions,
-        open(out_cif, "w"),
-        True)
+        modeller.topology, modeller.positions, open(out_cif, "w"), True
+    )
     cif = app.PDBxFile(out_cif)
 
     return cif
@@ -614,6 +625,113 @@ def setup_simulation(system, position, topology, integrator, platform_name="CUDA
     return simulation
 
 
+def create_custom_nonbonded_force_rf(
+    original_nonbonded_force,
+    indexes,
+    cutoff=1 * unit.nanometers,
+    ONE_4PI_EPS0=138.935456,
+):
+    """Create a CustomNonbondedForce with Reaction Field
+    to compute the solute-solvent interactions.
+
+    Parameters
+    ----------
+    original_nonbonded_force : NonbondedForce
+        The original NonbondedForce of the system
+    indexes : list
+        The list of the solute and solvent indexes
+    cutoff : float * unit.nanometers
+        The cutoff distance, default is 1 nm
+    ONE_4PI_EPS0 : float
+        The constant 1/(4*pi*epsilon0) in kJ nm / mol e2,
+        default is 138.935456 kJ nm / mol e2
+
+    Returns
+    -------
+    CustomNonbondedForce
+        The custom nonbonded force with reaction field
+    """
+
+    eps_solvent = original_nonbonded_force.getReactionFieldDielectric()
+    krf = (1 / (cutoff**3)) * (eps_solvent - 1) / (2 * eps_solvent + 1)
+    crf = (1 / cutoff) * (3 * eps_solvent) / (2 * eps_solvent + 1)
+
+    energy_expression = "4*epsilon*((sigma/r)^12 - (sigma/r)^6) + ONE_4PI_EPS0*chargeprod*(1/r + krf*r*r - crf);"
+    energy_expression += "epsilon = sqrt(epsilon1*epsilon2);"
+    energy_expression += "sigma = 0.5*(sigma1+sigma2);"
+    energy_expression += "krf = {:f};".format(krf.value_in_unit(unit.nanometer**-3))
+    energy_expression += "crf = {:f};".format(crf.value_in_unit(unit.nanometer**-1))
+    energy_expression += "chargeprod = charge1*charge2;"
+    energy_expression += "ONE_4PI_EPS0 = {:f};".format(ONE_4PI_EPS0)
+
+    custom_nonbonded_force = openmm.CustomNonbondedForce(energy_expression)
+    custom_nonbonded_force.addPerParticleParameter("charge")
+    custom_nonbonded_force.addPerParticleParameter("sigma")
+    custom_nonbonded_force.addPerParticleParameter("epsilon")
+    custom_nonbonded_force.setNonbondedMethod(
+        openmm.CustomNonbondedForce.CutoffPeriodic
+    )
+    custom_nonbonded_force.setCutoffDistance(cutoff)
+
+    for index in range(original_nonbonded_force.getNumParticles()):
+        charge, sigma, epsilon = original_nonbonded_force.getParticleParameters(index)
+        custom_nonbonded_force.addParticle([charge, sigma, epsilon])
+
+    for index in range(original_nonbonded_force.getNumExceptions()):
+        j, k, chargeprod, sigma, epsilon = (
+            original_nonbonded_force.getExceptionParameters(index)
+        )
+        custom_nonbonded_force.addExclusion(j, k)
+
+    for index in indexes:
+        custom_nonbonded_force.addInteractionGroup(index[0], index[1])
+
+    return custom_nonbonded_force
+
+
+def create_custom_bonded_force_rf(
+    original_nonbonded_force, atom_index, ONE_4PI_EPS0=138.935456
+):
+    """Create a CustomBondForce to compute the solute-solvent exceptions.
+    This force is used in combination with the CustomNonbondedForce with Reaction Field.
+    The CustomNonbondedForce with Reaction Field does not include exceptions,
+    so we need to add them with a CustomBondForce.
+
+    Parameters
+    ----------
+    original_nonbonded_force : NonbondedForce
+        The original NonbondedForce of the system
+    atom_index : list
+        The list of the solute and solvent indexes
+    ONE_4PI_EPS0 : float
+        The constant 1/(4*pi*epsilon0) in kJ nm / mol e2,
+        default is 138.935456 kJ nm / mol e2
+
+    Returns
+    -------
+    CustomBondForce
+        The custom bond force with reaction field
+    """
+
+    energy_expression = (
+        "4*epsilon*((sigma/r)^12 - (sigma/r)^6) + ONE_4PI_EPS0*chargeprod/r;"
+    )
+    energy_expression += "ONE_4PI_EPS0 = {:f};".format(ONE_4PI_EPS0)
+    custom_bond_force = openmm.CustomBondForce(energy_expression)
+    custom_bond_force.addPerBondParameter("chargeprod")
+    custom_bond_force.addPerBondParameter("sigma")
+    custom_bond_force.addPerBondParameter("epsilon")
+
+    for index in range(original_nonbonded_force.getNumExceptions()):
+        j, k, chargeprod, sigma, epsilon = (
+            original_nonbonded_force.getExceptionParameters(index)
+        )
+        if j in atom_index[0] and k in atom_index[1]:
+            custom_bond_force.addBond(j, k, [chargeprod, sigma, epsilon])
+
+    return custom_bond_force
+
+
 def print_forces(system, simulation):
     """Prints the forces of the system
 
@@ -633,6 +751,7 @@ def print_forces(system, simulation):
 
     for group, force in forces_dict.items():
         print(f"{group:<3} {force['name']:<25} {force['energy']}")
+
 
 def get_specific_forces(system, simulation, force_name):
     """Prints the forces of the system
@@ -654,8 +773,8 @@ def get_specific_forces(system, simulation, force_name):
     force_tot = []
 
     for group, force in forces_dict.items():
-        if force['name'] == force_name:
-            force_tot.append(force['energy'])
+        if force["name"] == force_name:
+            force_tot.append(force["energy"])
     return force_tot
 
 
@@ -690,7 +809,10 @@ def get_forces(system, simulation):
 
     return forces_dict
 
-def add_pos_restr(system, index_list, cif_ref, k_rest, restr_force_group=None, constant_name="k"):
+
+def add_pos_restr(
+    system, index_list, cif_ref, k_rest, restr_force_group=None, constant_name="k"
+):
     """Add position restraints to the system
 
     Parameters
@@ -707,31 +829,42 @@ def add_pos_restr(system, index_list, cif_ref, k_rest, restr_force_group=None, c
         Force group, default is 2
     constant_name : str
         Name of the force constant, default is k
-    
+
     Returns
     -------
     restraint : openmm.CustomExternalForce
         Restraint object
     """
 
-
-    restraint = openmm.CustomExternalForce(f'{constant_name}*periodicdistance(x, y, z, x0, y0, z0)^2')
+    restraint = openmm.CustomExternalForce(
+        f"{constant_name}*periodicdistance(x, y, z, x0, y0, z0)^2"
+    )
     system.addForce(restraint)
-    restraint.addGlobalParameter(constant_name, k_rest*unit.kilojoules_per_mole/unit.nanometer**2)
-    restraint.addPerParticleParameter('x0')
-    restraint.addPerParticleParameter('y0')
-    restraint.addPerParticleParameter('z0')
+    restraint.addGlobalParameter(
+        constant_name, k_rest * unit.kilojoules_per_mole / unit.nanometer**2
+    )
+    restraint.addPerParticleParameter("x0")
+    restraint.addPerParticleParameter("y0")
+    restraint.addPerParticleParameter("z0")
 
     for index in index_list:
         restraint.addParticle(index, cif_ref.positions[index])
-    
+
     if restr_force_group is not None:
         restraint.setForceGroup(restr_force_group)
-    
+
     return restraint
 
 
-def add_distance_restr(system, index_0_list, index_1_list, dist_min_list, k_rest, restr_force_group=None, constant_name="k_dist"):
+def add_distance_restr(
+    system,
+    index_0_list,
+    index_1_list,
+    dist_min_list,
+    k_rest,
+    restr_force_group=None,
+    constant_name="k_dist",
+):
     """Add position restraints to the system
 
     Parameters
@@ -750,27 +883,32 @@ def add_distance_restr(system, index_0_list, index_1_list, dist_min_list, k_rest
         Force group, default is 2
     constant_name : str
         Name of the force constant, default is k_dist
-    
+
     Returns
     -------
     restraint : openmm.CustomExternalForce
         Restraint object
     """
 
-    assert len(index_0_list) == len(index_1_list) == len(dist_min_list), "index_0, index_1 and dist_min must have the same length"
+    assert (
+        len(index_0_list) == len(index_1_list) == len(dist_min_list)
+    ), "index_0, index_1 and dist_min must have the same length"
 
     energy_function = f"{constant_name}*(max(0, r - r0))^2"
     restraint = openmm.CustomBondForce(energy_function)
     system.addForce(restraint)
-    restraint.addGlobalParameter(constant_name, k_rest*unit.kilojoules_per_mole/unit.nanometer**2)
-    restraint.addPerBondParameter('r0')
+    restraint.addGlobalParameter(
+        constant_name, k_rest * unit.kilojoules_per_mole / unit.nanometer**2
+    )
+    restraint.addPerBondParameter("r0")
     for index_0, index_1, dist_min in zip(index_0_list, index_1_list, dist_min_list):
         restraint.addBond(index_0, index_1, [dist_min * unit.nanometer])
 
     if restr_force_group is not None:
         restraint.setForceGroup(restr_force_group)
-    
+
     return restraint
+
 
 def compute_ladder_num(generic_name, min_temp, max_temp, sst2_score=False):
     """Compute the number of temperatures to simulate.
@@ -785,7 +923,7 @@ def compute_ladder_num(generic_name, min_temp, max_temp, sst2_score=False):
         Maximum temperature to simulate.
     sst2_score : bool, optional
         If True, use the SST2 score. The default is False.
-    
+
 
     Robert Denschlag, Martin Lingenheil, Paul Tavan,
     Optimal temperature ladders in replica exchange simulations,
@@ -1064,6 +1202,7 @@ def simulate(
     app.PDBFile.writeFile(
         topology, positions[: topology.getNumAtoms()], open(f"{generic_name}.pdb", "w")
     )
+
 
 def run_sim_check_time(
     simulation, nsteps, dt, save_checkpoint_steps=None, chekpoint_name=None

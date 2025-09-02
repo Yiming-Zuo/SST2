@@ -18,12 +18,9 @@ from scipy.ndimage import gaussian_filter1d
 # Logging
 logger = logging.getLogger(__name__)
 
+
 def read_SST2_data(
-    generic_name,
-    dt=0.004,
-    full_sep=",",
-    save_step_dcd=100000,
-    lambda_T_ref = 300.0
+    generic_name, dt=0.004, full_sep=",", save_step_dcd=100000, lambda_T_ref=300.0
 ):
     """
     Read the sst2 data from the csv files.
@@ -43,7 +40,7 @@ def read_SST2_data(
         Step number used in the dcd file. The default is 100000.
     lambda_T_ref : float, optional
         Reference temperature for the lambda. The default is None.
-    
+
     Returns
     -------
     df_all : pandas.DataFrame
@@ -51,18 +48,24 @@ def read_SST2_data(
 
     """
 
-    fields=["Step", "Aim Temp (K)", "E solute scaled (kJ/mole)",
+    fields = [
+        "Step",
+        "Aim Temp (K)",
+        "E solute scaled (kJ/mole)",
         "E solute not scaled (kJ/mole)",
-        "E solvent (kJ/mole)", "E solvent-solute (kJ/mole)"]
-    
+        "E solvent (kJ/mole)",
+        "E solvent-solute (kJ/mole)",
+    ]
+
     return read_ST_data(
         generic_name=generic_name,
         dt=dt,
         fields=fields,
         full_sep=full_sep,
         save_step_dcd=save_step_dcd,
-        lambda_T_ref=lambda_T_ref
+        lambda_T_ref=lambda_T_ref,
     )
+
 
 def read_ST_data(
     generic_name,
@@ -77,10 +80,10 @@ def read_ST_data(
     ],
     full_sep=",",
     save_step_dcd=100000,
-    lambda_T_ref=None
+    lambda_T_ref=None,
 ):
     """
-    
+
     Read the sst2 data from the csv files.
     The data may be splited in several files if simulation
     had to restart. The function merge all the files
@@ -143,7 +146,9 @@ def read_ST_data(
         # as function of the last simulation.
         if first_new_step < last_old_step - save_step_dcd:
             chk_step = (
-                df_sim_list[-1]['#"Step"'][df_sim_list[-1]['#"Step"'] % save_step_dcd == 0].iloc[-1]
+                df_sim_list[-1]['#"Step"'][
+                    df_sim_list[-1]['#"Step"'] % save_step_dcd == 0
+                ].iloc[-1]
                 - first_new_step
             )
             df_temp_part[fields[0]] += chk_step
@@ -159,7 +164,7 @@ def read_ST_data(
     logger.info("Delete DataFrame part from memory")
     for df_sim_part in df_sim_list:
         del df_sim_part
-    
+
     for df_temp_part in df_temp_list:
         del df_temp_part
 
@@ -188,7 +193,7 @@ def read_ST_data(
     # Concat both dataframe
     logger.info(f"Concat both dataframe")
     df_all = pd.concat([df_temp, df_sim], axis=1)
-    #df_all = pd.merge(df_temp, df_sim, on="Step", how="outer")
+    # df_all = pd.merge(df_temp, df_sim, on="Step", how="outer")
     del df_temp, df_sim
 
     # Add time column
@@ -213,16 +218,14 @@ def read_ST_data(
     if df_all["Step"].isna().any():
         logger.info(f"Remove Nan rows")
         df_all = df_all.dropna()
-    #df_all = df_all[df_all["Step"].notna()]
+    # df_all = df_all[df_all["Step"].notna()]
 
     return df_all
 
 
 def compute_exchange_prob(
-    df,
-    temp_col="Aim Temp (K)",
-    time_ax_name=r"$Time\;(\mu s)$",
-    exchange_time=2):
+    df, temp_col="Aim Temp (K)", time_ax_name=r"$Time\;(\mu s)$", exchange_time=2
+):
     """
     Compute the exchange probability and the round trip time
     for a given dataframe.
@@ -252,7 +255,9 @@ def compute_exchange_prob(
     temp_list = df[temp_col].unique()
     min_temp = temp_list[0]
     max_temp = temp_list[-1]
-    logger.info(f"Min_temp = {min_temp:.2f}, Max temp. = {max_temp:.2f}, #Rungs = {len(temp_list)}")
+    logger.info(
+        f"Min_temp = {min_temp:.2f}, Max temp. = {max_temp:.2f}, #Rungs = {len(temp_list)}"
+    )
 
     # Compute exchange probability:
     last_temp = min_temp
@@ -267,7 +272,7 @@ def compute_exchange_prob(
     step_num = 0
 
     step_time = df.loc[1, time_ax_name] - df.loc[0, time_ax_name]
-    step_time *= 1e6 # ps
+    step_time *= 1e6  # ps
     logger.info(f"Step time = {step_time:.2f} ps")
 
     trip_flag = False
@@ -313,13 +318,10 @@ def compute_exchange_prob(
     # get values in the same order as keys, and parse percentage values
     vals = [all_temp_change_num[k] for k in keys]
 
-    ax = sns.barplot(
-        x=temp_list,
-        y=vals,
-        hue=temp_list)
+    ax = sns.barplot(x=temp_list, y=vals, hue=temp_list)
     plt.xlabel(temp_col)
     plt.ylabel(r"$p()$")
-    #plt.title(r"Transition probability at each rung")
+    # plt.title(r"Transition probability at each rung")
     ax.get_legend().remove()
 
     # print(all_temp_change_num)
@@ -336,13 +338,8 @@ def compute_exchange_prob(
 
 
 def plot_lineplot_avg(
-    df,
-    x,
-    y,
-    quant=None,
-    color="black",
-    max_data=50000,
-    avg_win=1000):
+    df, x, y, quant=None, color="black", max_data=50000, avg_win=1000
+):
     """
     Plot a lineplot with a gaussian filter on the y axis.
 
@@ -362,7 +359,7 @@ def plot_lineplot_avg(
         Maximum number of data point to plot. The default is 50000.
     avg_win : int, optional
         Window size of the gaussian filter. The default is 1000.
-    
+
     Returns
     -------
     g : matplotlib.axes._subplots.AxesSubplot
@@ -428,7 +425,7 @@ def get_quant_min_max(pd_serie, quant=0.001):
         Pandas serie to analyze.
     quant : float, optional
         Quantile to use. The default is 0.001.
-    
+
     Returns
     -------
     val_min : float
@@ -440,7 +437,7 @@ def get_quant_min_max(pd_serie, quant=0.001):
     val_min = pd_serie.quantile(quant)
     val_max = pd_serie.quantile(1 - quant)
 
-    return(val_min, val_max)
+    return (val_min, val_max)
 
 
 def plot_distri_norm(
@@ -452,7 +449,8 @@ def plot_distri_norm(
     bins=100,
     element="step",
     quant=None,
-    bw_adjust=None):
+    bw_adjust=None,
+):
     """
     Plot a distribution plot with a gaussian filter on the y axis.
 
@@ -483,7 +481,6 @@ def plot_distri_norm(
         Axes of the plot.
     """
 
-
     local_df = filter_df(df, max_data)
 
     if x_label is None:
@@ -497,13 +494,20 @@ def plot_distri_norm(
     fig, ax1 = plt.subplots()
 
     g = sns.histplot(
-        local_df, stat="density",
+        local_df,
+        stat="density",
         kde=True,
-        bins=bins, fill=False,
-        x=x, common_norm=False,
-        linewidth=1, alpha=0.3,
-        hue=hue, element=element,
-        ax=ax1, kde_kws=kde_kws)
+        bins=bins,
+        fill=False,
+        x=x,
+        common_norm=False,
+        linewidth=1,
+        alpha=0.3,
+        hue=hue,
+        element=element,
+        ax=ax1,
+        kde_kws=kde_kws,
+    )
 
     if quant is not None:
         x_min, x_max = get_quant_min_max(local_df[x], quant)
@@ -519,23 +523,36 @@ def plot_distri_norm(
         h.set_alpha(1.0)
 
     if len(handles) > 15:
-        ncol=2
+        ncol = 2
         x_gap = 1.3
     else:
-        ncol=1
+        ncol = 1
         x_gap = 1.2
 
-    sns.move_legend(g, "lower center", bbox_to_anchor=(x_gap, 0.), ncol=ncol, title_fontsize=14)
+    sns.move_legend(
+        g, "lower center", bbox_to_anchor=(x_gap, 0.0), ncol=ncol, title_fontsize=14
+    )
 
     plt.xlabel(x_label)
-    return(ax1)
+    return ax1
 
 
 def plot_scatter(
-    df, x, y, hue=None, x_label=None,
-    y_label=None, quant=None, s=10, color=None,
-    linewidth=0, label=None, legend="auto",
-    alpha=None, max_data=50000):
+    df,
+    x,
+    y,
+    hue=None,
+    x_label=None,
+    y_label=None,
+    quant=None,
+    s=10,
+    color=None,
+    linewidth=0,
+    label=None,
+    legend="auto",
+    alpha=None,
+    max_data=50000,
+):
     """
     Plot a scatter plot.
 
@@ -569,7 +586,7 @@ def plot_scatter(
         Transparency of the points. The default is None.
     max_data : int, optional
         Maximum number of data point to plot. The default is 50000.
-        
+
     Returns
     -------
     g : matplotlib.axes._subplots.AxesSubplot
@@ -578,15 +595,17 @@ def plot_scatter(
 
     local_df = filter_df(df, max_data)
 
-    g = sns.scatterplot(data=local_df,
-                    x=x,
-                    y=y,
-                    s=s,
-                    linewidth=linewidth,
-                    legend=legend,
-                    color=color,
-                    alpha=alpha,
-                    hue=hue)
+    g = sns.scatterplot(
+        data=local_df,
+        x=x,
+        y=y,
+        s=s,
+        linewidth=linewidth,
+        legend=legend,
+        color=color,
+        alpha=alpha,
+        hue=hue,
+    )
 
     if x_label is not None:
         plt.xlabel(x_label)
@@ -604,60 +623,53 @@ def plot_scatter(
     return g
 
 
-def plot_weight_RMSD(df,
-        x=r"$Time\;(\mu s)$",
-        hue='Temp (K)',
-        ener='new_pot',
-        time_ax_name=r"$Time\;(\mu s)$",
-        final_weight_dict=None,
-        max_data=50000,
-        plot_weights=False):
+def plot_weight_RMSD(
+    df,
+    x=r"$Time\;(\mu s)$",
+    hue="Temp (K)",
+    ener="new_pot",
+    time_ax_name=r"$Time\;(\mu s)$",
+    final_weight_dict=None,
+    max_data=50000,
+    plot_weights=False,
+):
 
     local_df = filter_df(df, max_data)
-    temp_list = local_df['Aim Temp (K)'].unique()
+    temp_list = local_df["Aim Temp (K)"].unique()
     # gaussian_filter1d(local_df[y], avg_win)
     local_df = compute_moving_average(local_df, ener=ener)
 
     local_df = compute_weight_RMSD(
-        local_df, final_weight_dict=final_weight_dict, ener=ener)
+        local_df, final_weight_dict=final_weight_dict, ener=ener
+    )
 
     if plot_weights:
 
-        ax1 = sns.lineplot(
-            data=local_df,
-            x=x,
-            y='avg_ener',
-            hue=hue,
-            lw=2)
+        ax1 = sns.lineplot(data=local_df, x=x, y="avg_ener", hue=hue, lw=2)
         plt.ylabel(r"E $(KJ.mol^{-1})$")
-        
+
         for temp in temp_list:
-            avg_temp = local_df[local_df['Aim Temp (K)'] == temp][ener].mean()
+            avg_temp = local_df[local_df["Aim Temp (K)"] == temp][ener].mean()
             plt.axhline(avg_temp, lw=1, c="gray", linestyle=":")
         plt.legend(title=hue, bbox_to_anchor=(1.01, 1.0))
         plt.show()
-    
-    ax2 = sns.lineplot(
-        data=local_df,
-        x=time_ax_name,
-        y='Weight RMSD',
-        lw=2)
+
+    ax2 = sns.lineplot(data=local_df, x=time_ax_name, y="Weight RMSD", lw=2)
     plt.ylabel(r"RMSD $(KJ.mol^{-1})$")
     plt.title(r"Weights $f_i$ RMSD")
 
     return
 
-def compute_moving_average(df, ener='new_pot', col_name='avg_ener'):
 
-    temp_list = df['Aim Temp (K)'].unique()
+def compute_moving_average(df, ener="new_pot", col_name="avg_ener"):
+
+    temp_list = df["Aim Temp (K)"].unique()
     temp_list.sort()
-    temp_list_avg = {temp:0 for temp in temp_list}
-    temp_list_num = {temp:0 for temp in temp_list}
+    temp_list_avg = {temp: 0 for temp in temp_list}
+    temp_list_num = {temp: 0 for temp in temp_list}
     mov_avg = []
 
-    for temp, new_pot in zip(
-            df['Aim Temp (K)'], 
-            df[ener]):
+    for temp, new_pot in zip(df["Aim Temp (K)"], df[ener]):
         temp_list_num[temp] += 1
         temp_list_avg[temp] += (new_pot - temp_list_avg[temp]) / temp_list_num[temp]
         mov_avg.append(temp_list_avg[temp])
@@ -667,78 +679,70 @@ def compute_moving_average(df, ener='new_pot', col_name='avg_ener'):
     return df
 
 
-def compute_weight_RMSD(df, final_weight_dict=None, ener='new_pot'):
+def compute_weight_RMSD(df, final_weight_dict=None, ener="new_pot"):
 
-    df.loc[:, 'Weight RMSD'] = 0
+    df.loc[:, "Weight RMSD"] = 0
 
     if final_weight_dict is None:
         temp_final_avg = {}
     else:
         temp_final_avg = final_weight_dict
 
-    temp_list = df['Aim Temp (K)'].unique()
+    temp_list = df["Aim Temp (K)"].unique()
     temp_list.sort()
 
     for temp in temp_list:
 
         if final_weight_dict is None:
-            tmp_df = df[df['Aim Temp (K)'] == temp]
+            tmp_df = df[df["Aim Temp (K)"] == temp]
             temp_final_avg[temp] = tmp_df[ener].mean()
-        
+
         last_avg_ener = np.nan
         weight_list = []
-        for for_temp, avg_ener in zip(
-            df['Aim Temp (K)'], 
-            df['avg_ener']):
+        for for_temp, avg_ener in zip(df["Aim Temp (K)"], df["avg_ener"]):
             if for_temp == temp:
                 last_avg_ener = avg_ener
             weight_list.append(last_avg_ener)
-        
-        df.loc[:, f'weight {temp}'] = weight_list
-        df['Weight RMSD'] += (df[f'weight {temp}'] - temp_final_avg[temp]) ** 2
 
-    df['Weight RMSD'] = (df['Weight RMSD'] / len(temp_list)) ** 0.5
+        df.loc[:, f"weight {temp}"] = weight_list
+        df["Weight RMSD"] += (df[f"weight {temp}"] - temp_final_avg[temp]) ** 2
+
+    df["Weight RMSD"] = (df["Weight RMSD"] / len(temp_list)) ** 0.5
 
     return df
 
 
-def plot_weight_RMSD(df,
-        x=r"$Time\;(\mu s)$",
-        hue='Temp (K)',
-        ener='new_pot',
-        time_ax_name=r"$Time\;(\mu s)$",
-        final_weight_dict=None,
-        max_data=50000,
-        plot_weights=False):
+def plot_weight_RMSD(
+    df,
+    x=r"$Time\;(\mu s)$",
+    hue="Temp (K)",
+    ener="new_pot",
+    time_ax_name=r"$Time\;(\mu s)$",
+    final_weight_dict=None,
+    max_data=50000,
+    plot_weights=False,
+):
 
     local_df = filter_df(df, max_data)
-    temp_list = local_df['Aim Temp (K)'].unique()
+    temp_list = local_df["Aim Temp (K)"].unique()
     local_df = compute_moving_average(local_df, ener=ener)
 
     local_df = compute_weight_RMSD(
-        local_df, final_weight_dict=final_weight_dict, ener=ener)
+        local_df, final_weight_dict=final_weight_dict, ener=ener
+    )
 
     if plot_weights:
 
-        ax1 = sns.lineplot(
-            data=local_df,
-            x=x,
-            y='avg_ener',
-            hue=hue,
-            lw=2)
+        ax1 = sns.lineplot(data=local_df, x=x, y="avg_ener", hue=hue, lw=2)
         plt.ylabel(r"E $(KJ.mol^{-1})$")
-        
+
         for temp in temp_list:
-            avg_temp = local_df[local_df['Aim Temp (K)'] == temp][ener].mean()
+            avg_temp = local_df[local_df["Aim Temp (K)"] == temp][ener].mean()
             plt.axhline(avg_temp, lw=1, c="gray", linestyle=":")
         plt.legend(title=hue, bbox_to_anchor=(1.01, 1.0))
         plt.show()
-    
-    ax2 = sns.lineplot(
-        data=local_df,
-        x=time_ax_name,
-        y='Weight RMSD',
-        lw=2)
+
+    ax2 = sns.lineplot(data=local_df, x=time_ax_name, y="Weight RMSD", lw=2)
     plt.ylabel(r"RMSD $(KJ.mol^{-1})$")
     plt.title(r"Weights $f_i$ RMSD")
 
@@ -746,12 +750,27 @@ def plot_weight_RMSD(df,
 
 
 def plot_free_energy(
-        xall, yall, weights=None, ax=None, nbins=100, ncontours=100,
-        avoid_zero_count=False, minener_zero=True, kT=2.479,
-        vmin=None, vmax=None, cmap='nipy_spectral', cbar=True,
-        cbar_label='free energy (kJ/mol)', cax=None, levels=None,
-        cbar_orientation='vertical', norm=None, range=None,
-        level_gap=None):
+    xall,
+    yall,
+    weights=None,
+    ax=None,
+    nbins=100,
+    ncontours=100,
+    avoid_zero_count=False,
+    minener_zero=True,
+    kT=2.479,
+    vmin=None,
+    vmax=None,
+    cmap="nipy_spectral",
+    cbar=True,
+    cbar_label="free energy (kJ/mol)",
+    cax=None,
+    levels=None,
+    cbar_orientation="vertical",
+    norm=None,
+    range=None,
+    level_gap=None,
+):
     """
     Plot the free energy of a 2D histogram.
 
@@ -800,7 +819,7 @@ def plot_free_energy(
         Range of the data. The default is None.
     level_gap : float, optional
         Gap between levels. The default is None.
-    
+
     Returns
     -------
     fig : matplotlib.figure.Figure
@@ -809,21 +828,22 @@ def plot_free_energy(
         Axes of the plot.
     misc : dict
         Dictionary with the colorbar.
-    
+
     """
     z, xedge, yedge = np.histogram2d(
-        xall, yall, bins=nbins, weights=weights, range=range)
+        xall, yall, bins=nbins, weights=weights, range=range
+    )
     if avoid_zero_count:
         z = np.maximum(z, np.min(z[z.nonzero()]))
     x = 0.5 * (xedge[:-1] + xedge[1:])
     y = 0.5 * (yedge[:-1] + yedge[1:])
-    
+
     pi = z.T / float(z.sum())
     free_energy = np.inf * np.ones(shape=z.shape)
     nonzero = pi.nonzero()
     zero = np.nonzero(pi == 0)
     free_energy[nonzero] = -np.log(pi[nonzero])
-    #if minener_zero:
+    # if minener_zero:
     free_energy[nonzero] -= np.min(free_energy[nonzero])
     free_energy *= kT
 
@@ -831,57 +851,65 @@ def plot_free_energy(
     # replace infinity by a value slightly above the maximum free energy:
 
     if vmax is None:
-        vmax = np.max(free_energy[nonzero])+0.5
-    #free_energy[zero] = np.max(free_energy[nonzero])+1.0
-    free_energy[zero] = vmax+0.5
+        vmax = np.max(free_energy[nonzero]) + 0.5
+    # free_energy[zero] = np.max(free_energy[nonzero])+1.0
+    free_energy[zero] = vmax + 0.5
     if vmin is None:
         vmin = 0
     # and fix the levels for the colormap:
     if levels is None:
         cbar_ticks = np.linspace(vmin, vmax, ncontours)
     else:
-        cbar_ticks = np.linspace(vmin, vmax, levels + 1)            
+        cbar_ticks = np.linspace(vmin, vmax, levels + 1)
 
     if ax is None:
         fig, ax = plt.subplots()
     else:
         fig = ax.get_figure()
-    
+
     if levels is None and level_gap is not None:
         max_free = np.max(free_energy[nonzero])
         levels = int(max_free // level_gap)
         logger.info(levels)
 
     mappable = ax.contourf(
-        x, y, free_energy, ncontours, norm=norm,
-        vmin=vmin, vmax=vmax, cmap=cmap,
-        levels=cbar_ticks)
-    
+        x,
+        y,
+        free_energy,
+        ncontours,
+        norm=norm,
+        vmin=vmin,
+        vmax=vmax,
+        cmap=cmap,
+        levels=cbar_ticks,
+    )
+
     misc = dict(mappable=mappable)
     if cbar:
         if levels is not None:
-            #print("ticks", levels, cbar_ticks)
+            # print("ticks", levels, cbar_ticks)
             cbar = fig.colorbar(
                 mappable,
                 ax=ax,
                 orientation=cbar_orientation,
                 ticks=cbar_ticks,
-                #extend='both'
-                )
+                # extend='both'
+            )
         else:
             cbar = fig.colorbar(mappable, ax=ax, orientation=cbar_orientation)
         cbar.set_label(cbar_label)
         misc.update(cbar=cbar)
 
-    #if cbar:
+    # if cbar:
     #    cbar = fig.colorbar(
     #        mappable,
     #        ax=ax,
     #        orientation=cbar_orientation)
     #    cbar.set_label(cbar_label)
     #    misc.update(cbar=cbar)
-        
+
     return fig, ax, misc
+
 
 def compute_cluster_hdbscan(pca_df, min_cluster_size=50, min_samples=50):
     """
@@ -895,7 +923,7 @@ def compute_cluster_hdbscan(pca_df, min_cluster_size=50, min_samples=50):
         Minimum cluster size. The default is 50.
     min_samples : int, optional
         Minimum number of samples. The default is 50.
-    
+
     Returns
     -------
     clust_serie : pandas.Categorical
@@ -904,15 +932,19 @@ def compute_cluster_hdbscan(pca_df, min_cluster_size=50, min_samples=50):
     import hdbscan
 
     clusterer = hdbscan.HDBSCAN(
-        min_cluster_size=min_cluster_size,
-        min_samples=min_samples).fit(pca_df)
+        min_cluster_size=min_cluster_size, min_samples=min_samples
+    ).fit(pca_df)
     labels = clusterer.labels_
 
     # Number of clusters in labels, ignoring noise if present.
     n_clusters_ = len(set(labels)) - (1 if -1 in labels else 0)
     n_noise_ = list(labels).count(-1)
 
-    logger.info('Number of cluster : {}, perc of non clustered points : {:.1f}%'.format(n_clusters_, 100*n_noise_/len(pca_df)))
+    logger.info(
+        "Number of cluster : {}, perc of non clustered points : {:.1f}%".format(
+            n_clusters_, 100 * n_noise_ / len(pca_df)
+        )
+    )
 
     # count each cluster
     clust_dict = {}
@@ -923,7 +955,10 @@ def compute_cluster_hdbscan(pca_df, min_cluster_size=50, min_samples=50):
 
     # sort cluster as function of clust pop
 
-    sorted_dict = {k: v for k, v in sorted(clust_dict.items(), key=lambda item: item[1], reverse=True)}
+    sorted_dict = {
+        k: v
+        for k, v in sorted(clust_dict.items(), key=lambda item: item[1], reverse=True)
+    }
 
     # Create new cluster list
     new_label = np.copy(labels)
@@ -936,17 +971,23 @@ def compute_cluster_hdbscan(pca_df, min_cluster_size=50, min_samples=50):
     for i, clust in enumerate(sorted_dict):
 
         if clust != -1:
-            logger.info(f'Cluster:{clust_new:3}   {sum(new_label == clust):5} | {sum(new_label == clust)/len(labels):.3f}')
+            logger.info(
+                f"Cluster:{clust_new:3}   {sum(new_label == clust):5} | {sum(new_label == clust)/len(labels):.3f}"
+            )
             new_value_list.append(clust_new)
             clust_new += 1
         else:
-            logger.info(f'Not Clustered {sum(new_label == clust):5} | {sum(new_label == clust)/len(labels):.3f}')
+            logger.info(
+                f"Not Clustered {sum(new_label == clust):5} | {sum(new_label == clust)/len(labels):.3f}"
+            )
             new_value_list.append(0)
             cat_to_remove = [0]
         select_list.append(new_label == clust)
 
     new_label = np.select(select_list, new_value_list, new_label)
-    clust_serie = pd.Categorical(pd.Series(data=new_label)).remove_categories(cat_to_remove)
+    clust_serie = pd.Categorical(pd.Series(data=new_label)).remove_categories(
+        cat_to_remove
+    )
 
     return clust_serie
 
@@ -963,14 +1004,14 @@ def compute_cluster_kmean(pca_df, max_cluster=20, random_state=0):
         Maximum number of cluster to test. The default is 20.
     random_state : int, optional
         Random state for the algorithm. The default is 0.
-    
+
     Returns
     -------
     clust_serie : pandas.Categorical
         Categorical serie with the cluster.
     kmeans.cluster_centers_ : numpy.ndarray
         Cluster centers.
-    
+
     """
 
     from sklearn.cluster import KMeans
@@ -991,7 +1032,7 @@ def compute_cluster_kmean(pca_df, max_cluster=20, random_state=0):
         logger.info(f"{k}/{max_cluster}")
         kmeans = KMeans(n_clusters=k, **kmeans_kwargs)
         kmeans.fit(pca_df)
-        kmeans_list.append(kmeans)     
+        kmeans_list.append(kmeans)
         score = silhouette_score(pca_df, kmeans.labels_)
         silhouette_coefficients.append(score)
 
@@ -1004,9 +1045,8 @@ def compute_cluster_kmean(pca_df, max_cluster=20, random_state=0):
     logger.info(f"{index_min+2} clusters optimal")
 
     clust_serie = pd.Categorical(
-        pd.Series(
-            data=kmeans_list[index_min].labels_) + 1
-        ).remove_categories([])
+        pd.Series(data=kmeans_list[index_min].labels_) + 1
+    ).remove_categories([])
 
     return clust_serie, kmeans_list[index_min].cluster_centers_
 
@@ -1021,7 +1061,7 @@ def compute_Tm(temperatures, folding_fraction):
         List of temperatures.
     folding_fraction : list
         List of folding fraction.
-    
+
     Returns
     -------
     Tm : float
@@ -1032,27 +1072,29 @@ def compute_Tm(temperatures, folding_fraction):
 
     # Define the Four Parameter Logistic Regression (4PL)
     def sigmoidal_curve(x, A, B, C, D):
-        return D + ((A-D)/(1.0+((x/C)**B)))
+        return D + ((A - D) / (1.0 + ((x / C) ** B)))
 
     p0 = [1.0, 0.0, 340, 0.05]
     try:
         popt, pcov = curve_fit(sigmoidal_curve, temperatures, folding_fraction, p0=p0)
-        logger.info(f'Melting Temperature (Tm): {popt[2]:.2f} K')
-        return(popt[2])
+        logger.info(f"Melting Temperature (Tm): {popt[2]:.2f} K")
+        return popt[2]
     except RuntimeError:
         logger.error("Error - curve_fit failed")
-        return(None)
+        return None
 
 
-def plot_folding_fraction(df,
-                col="RMSD (nm)",
-                cutoff=0.18,
-                label=None,
-                start_time=0,
-                time_ax_name=r"$Time\;(\mu s)$",
-                recompute_temp_flag=True,
-                temp_col='Aim Temp (K)',
-                ref_temp=300.0):
+def plot_folding_fraction(
+    df,
+    col="RMSD (nm)",
+    cutoff=0.18,
+    label=None,
+    start_time=0,
+    time_ax_name=r"$Time\;(\mu s)$",
+    recompute_temp_flag=True,
+    temp_col="Aim Temp (K)",
+    ref_temp=300.0,
+):
     """
     Plot the fraction of folded protein as a function of the temperature.
 
@@ -1076,7 +1118,7 @@ def plot_folding_fraction(df,
         Column with the temperature. The default is 'Aim Temp (K)'.
     ref_temp : float, optional
         Reference temperature. The default is 300.0.
-    
+
     Returns
     -------
     Tm : float
@@ -1085,33 +1127,29 @@ def plot_folding_fraction(df,
 
     df_time = df[(df[time_ax_name] > start_time)]
 
-    fold_frac = compute_folding_fraction(
-        df_time, col, cutoff)
+    fold_frac = compute_folding_fraction(df_time, col, cutoff)
 
     temp_list = df[temp_col].unique()
     temp_list.sort()
 
     if recompute_temp_flag:
         if ref_temp not in temp_list:
-            ref_temp = temp_list[np.argmin(abs(temp_list-300))]
+            ref_temp = temp_list[np.argmin(abs(temp_list - 300))]
         temp_list = recompute_temp(df, ref_temp=ref_temp)
 
     plt.plot(temp_list, fold_frac, label=label)
     plt.scatter(temp_list, fold_frac)
-    plt.xlabel('Temperature (K)')
-    plt.ylabel('fraction folded')
-    plt.ylim((0,1.0))
+    plt.xlabel("Temperature (K)")
+    plt.ylabel("fraction folded")
+    plt.ylim((0, 1.0))
 
     return compute_Tm(temp_list, fold_frac)
 
 
 def compute_folding_fraction(
-        df,
-        col="RMSD (nm)",
-        cutoff=0.18,
-        temp_col='Aim Temp (K)',
-        temp_list=None):
-    """ Compute the fraction of folded protein.
+    df, col="RMSD (nm)", cutoff=0.18, temp_col="Aim Temp (K)", temp_list=None
+):
+    """Compute the fraction of folded protein.
 
     Parameters
     ----------
@@ -1125,7 +1163,7 @@ def compute_folding_fraction(
         Column with the temperature. The default is 'Aim Temp (K)'.
     temp_list : list, optional
         List of temperature to use. The default is None.
-    
+
     Returns
     -------
     fold_frac : list
@@ -1140,157 +1178,181 @@ def compute_folding_fraction(
     fold_frac = []
 
     for temp in temp_list:
-        
+
         local_df = df[(df[temp_col] == temp)]
-        
+
         num_frame = len(local_df)
         num_cutoff = sum(local_df[col] < cutoff)
-        
+
         if num_frame == 0:
             fold_frac.append(0)
         else:
-            fold_frac.append(num_cutoff/num_frame)
+            fold_frac.append(num_cutoff / num_frame)
 
-
-    
-    return(fold_frac)
+    return fold_frac
 
 
 def recompute_temp(df, ref_temp=300.0):
 
     # Compute real temp using Stinermann et al. JCTC 2015
-    
+
     # Bi' = Bi(1 + ((Bref/Bi)**0.5 -1 ) ( Epw/(Epp+Epw)) )
-    temp_list_traj = df['Aim Temp (K)'].unique()
+    temp_list_traj = df["Aim Temp (K)"].unique()
     temp_list_traj.sort()
 
     new_temp_list = []
     ref_temp_index = list(temp_list_traj).index(ref_temp)
-    
-    inverseTemperatures = [1.0/(unit.MOLAR_GAS_CONSTANT_R*t) for t in temp_list_traj]
-    
+
+    inverseTemperatures = [
+        1.0 / (unit.MOLAR_GAS_CONSTANT_R * t) for t in temp_list_traj
+    ]
+
     for i, temp in enumerate(temp_list_traj):
         local_df = df[df["Aim Temp (K)"] == temp]
-        #Epw
+        # Epw
         Epp = local_df["E solute scaled (kJ/mole)"].mean()
         Epw = local_df["E solvent-solute (kJ/mole)"].mean()
-        
-        new_Bi = inverseTemperatures[i]*(1 + ((inverseTemperatures[ref_temp_index]/inverseTemperatures[i])**0.5 -1 ) * ( Epw/(Epp+Epw)) )
-        new_temp = 1.0/(unit.MOLAR_GAS_CONSTANT_R*new_Bi)
+
+        new_Bi = inverseTemperatures[i] * (
+            1
+            + (
+                (inverseTemperatures[ref_temp_index] / inverseTemperatures[i]) ** 0.5
+                - 1
+            )
+            * (Epw / (Epp + Epw))
+        )
+        new_temp = 1.0 / (unit.MOLAR_GAS_CONSTANT_R * new_Bi)
         # print(i, temp, new_temp)
         new_temp_list.append(new_temp)
 
-    return(new_temp_list)
+    return new_temp_list
 
 
-def compute_folding_fraction_RMSD(df, col="RMSD (nm)",
-    temp_col='Aim Temp (K)',
+def compute_folding_fraction_RMSD(
+    df,
+    col="RMSD (nm)",
+    temp_col="Aim Temp (K)",
     cutoff=0.18,
     start_time=0,
     time_ax_name=r"$Time\;(\mu s)$",
-    ref_fold_frac = None,
-    time_interval=2.0):
+    ref_fold_frac=None,
+    time_interval=2.0,
+):
 
     if ref_fold_frac is None:
         df_time = df[(df[time_ax_name] > start_time)]
-        ref_fold_frac = compute_folding_fraction(
-            df_time, col, cutoff)
+        ref_fold_frac = compute_folding_fraction(df_time, col, cutoff)
         ref_fold_frac = np.array(ref_fold_frac)
 
-    temp_list = df['Aim Temp (K)'].unique()
+    temp_list = df["Aim Temp (K)"].unique()
     temp_list.sort()
 
     max_time = df[time_ax_name].max()
 
     RMSD_list = []
     time_list = []
-    for i in range( int((max_time-start_time)/time_interval) + 1):
-        #print(f"{i}  {start_time:.1f}  {start_time + (i + 1) * time_interval:.1f}")
-    
+    for i in range(int((max_time - start_time) / time_interval) + 1):
+        # print(f"{i}  {start_time:.1f}  {start_time + (i + 1) * time_interval:.1f}")
 
-        df_time = df[(df[time_ax_name] > start_time) &
-                     (df[time_ax_name] < start_time + (i + 1) * time_interval)]
+        df_time = df[
+            (df[time_ax_name] > start_time)
+            & (df[time_ax_name] < start_time + (i + 1) * time_interval)
+        ]
 
         fold_frac = compute_folding_fraction(
-            df=df_time,
-            col=col,
-            cutoff=cutoff,
-            temp_col=temp_col,
-            temp_list=temp_list)
-        
-        fold_frac = np.array(fold_frac)
-        
-        RMSD_list.append(np.sum( (ref_fold_frac-fold_frac)**2))
-        time_list.append(start_time + (i + 1) * time_interval)
+            df=df_time, col=col, cutoff=cutoff, temp_col=temp_col, temp_list=temp_list
+        )
 
+        fold_frac = np.array(fold_frac)
+
+        RMSD_list.append(np.sum((ref_fold_frac - fold_frac) ** 2))
+        time_list.append(start_time + (i + 1) * time_interval)
 
     return time_list, RMSD_list
 
-def plot_folding_fraction_RMSD(df, col="RMSD (nm)", cutoff=0.18, label=None,
-    start_time=0, time_ax_name=r"$Time\;(\mu s)$",
-    ref_fold_frac = None,
-    color=None, ls='-',
-    s=20, alpha=1.0,
-    time_interval=2.0):
+
+def plot_folding_fraction_RMSD(
+    df,
+    col="RMSD (nm)",
+    cutoff=0.18,
+    label=None,
+    start_time=0,
+    time_ax_name=r"$Time\;(\mu s)$",
+    ref_fold_frac=None,
+    color=None,
+    ls="-",
+    s=20,
+    alpha=1.0,
+    time_interval=2.0,
+):
 
     time_list, RMSD_list = compute_folding_fraction_RMSD(
-        df, col, cutoff,
-        start_time, time_ax_name,
-        ref_fold_frac,
-        time_interval)
+        df, col, cutoff, start_time, time_ax_name, ref_fold_frac, time_interval
+    )
 
     if color is None:
         plt.plot(time_list, RMSD_list, label=label, ls=ls, alpha=alpha)
         plt.scatter(time_list, RMSD_list, ls=ls, s=s, alpha=alpha)
     else:
         plt.plot(time_list, RMSD_list, label=label, color=color, ls=ls, alpha=alpha)
-        plt.scatter(time_list, RMSD_list, color=color, ls=ls, s=s, alpha=alpha)        
-    
+        plt.scatter(time_list, RMSD_list, color=color, ls=ls, s=s, alpha=alpha)
+
     plt.xlabel(time_ax_name)
-    plt.ylabel('fraction folded RMSD')
+    plt.ylabel("fraction folded RMSD")
     plt.legend()
 
     return time_list, RMSD_list
 
 
-def plot_folding_fraction_convergence(df, col="RMSD (nm)", cutoff=0.18, label=None,
-    start_time=0, time_ax_name=r"$Time\;(\mu s)$", recompute_temp_flag=False,
-    ref_temp=300.0, time_interval=2.0):
+def plot_folding_fraction_convergence(
+    df,
+    col="RMSD (nm)",
+    cutoff=0.18,
+    label=None,
+    start_time=0,
+    time_ax_name=r"$Time\;(\mu s)$",
+    recompute_temp_flag=False,
+    ref_temp=300.0,
+    time_interval=2.0,
+):
 
-    temp_list = df['Aim Temp (K)'].unique()
+    temp_list = df["Aim Temp (K)"].unique()
     temp_list.sort()
-
 
     if recompute_temp_flag:
         if ref_temp not in temp_list:
-            ref_temp = temp_list[np.argmin(abs(temp_list-300))]
+            ref_temp = temp_list[np.argmin(abs(temp_list - 300))]
         temp_list_plot = recompute_temp(df, ref_temp=ref_temp)
     else:
         temp_list_plot = temp_list
-    
+
     max_time = df[time_ax_name].max()
     logger.info(max_time)
-    
-    for i in range( int((max_time-start_time)/time_interval) + 1):
-        #print(f"{i}  {start_time:.1f}  {start_time + (i + 1) * time_interval:.1f}")
-    
 
-        df_time = df[(df[time_ax_name] > start_time) &
-                     (df[time_ax_name] < start_time + (i + 1) * time_interval)]
-        
-        fold_frac = compute_folding_fraction(
-            df_time, col, cutoff)
-                
-        plt.plot(temp_list_plot, fold_frac, label=f"{start_time}-{start_time + (i + 1) * time_interval:.1f}")
+    for i in range(int((max_time - start_time) / time_interval) + 1):
+        # print(f"{i}  {start_time:.1f}  {start_time + (i + 1) * time_interval:.1f}")
+
+        df_time = df[
+            (df[time_ax_name] > start_time)
+            & (df[time_ax_name] < start_time + (i + 1) * time_interval)
+        ]
+
+        fold_frac = compute_folding_fraction(df_time, col, cutoff)
+
+        plt.plot(
+            temp_list_plot,
+            fold_frac,
+            label=f"{start_time}-{start_time + (i + 1) * time_interval:.1f}",
+        )
         plt.scatter(temp_list_plot, fold_frac)
-    
-    plt.xlabel('Temperature (K)')
-    plt.ylabel('fraction folded')
-    plt.ylim((0,1.0))
+
+    plt.xlabel("Temperature (K)")
+    plt.ylabel("fraction folded")
+    plt.ylim((0, 1.0))
     plt.legend()
 
 
-def plot_rung_occupancy(df, hue='group'):
+def plot_rung_occupancy(df, hue="group"):
 
     hue_list = df[hue].unique()
 
@@ -1298,29 +1360,31 @@ def plot_rung_occupancy(df, hue='group'):
 
         sim_df = df[df[hue] == hue_val]
 
-        #for temp in enumerate(temp_list):
-        temp_count = sim_df['Aim Temp (K)'].value_counts(normalize=True)
+        # for temp in enumerate(temp_list):
+        temp_count = sim_df["Aim Temp (K)"].value_counts(normalize=True)
         temp_count = temp_count.sort_index()
-        #print(len(temp_count))
-        #print(temp_count)
-        temp_count = temp_count / (1/len(temp_count)) -1
-        #print(temp_count_rel)
-        
+        # print(len(temp_count))
+        # print(temp_count)
+        temp_count = temp_count / (1 / len(temp_count)) - 1
+        # print(temp_count_rel)
+
         plt.plot(temp_count.index, temp_count.values, label=hue_val)
         plt.scatter(temp_count.index, temp_count.values)
-    
-    plt.xlabel('Temperature (K)')
-    plt.ylabel(r'$\Delta$ Rung Occupancy')
+
+    plt.xlabel("Temperature (K)")
+    plt.ylabel(r"$\Delta$ Rung Occupancy")
     plt.legend(bbox_to_anchor=(1.01, 1.0))
 
 
-def count_rmsd_transition(df,
+def count_rmsd_transition(
+    df,
     rmsd_fold=0.2,
     rmsd_unfold=0.4,
     dt=None,
     sim_name_col="sim",
-    rmsd_col='RMSD (nm)',
-    time_ax_name=r"$Time\;(\mu s)$"):
+    rmsd_col="RMSD (nm)",
+    time_ax_name=r"$Time\;(\mu s)$",
+):
 
     sim_list = df[sim_name_col].unique()
     trans_list = []
@@ -1348,27 +1412,28 @@ def count_rmsd_transition(df,
             dt_steps = step_gap * dt_sim
 
         max_time = len(sim_df) * dt_steps / 1e6
-        logger.info(f"Computed max time: {max_time:.3f}, df max time: {sim_df[time_ax_name].iloc[-1]:.3f}")
+        logger.info(
+            f"Computed max time: {max_time:.3f}, df max time: {sim_df[time_ax_name].iloc[-1]:.3f}"
+        )
 
         trans_freq = trans_num / max_time
         trans_list.append(trans_freq)
 
-        logger.info(f'sim: {sim:20}  trans num={trans_num:6}  clust_freq = {trans_freq:.2f}/us, {max_time:.2f} {len(sim_df):.2f} ')
+        logger.info(
+            f"sim: {sim:20}  trans num={trans_num:6}  clust_freq = {trans_freq:.2f}/us, {max_time:.2f} {len(sim_df):.2f} "
+        )
 
-    df_trans = pd.DataFrame({'sim': sim_list, 'trans': trans_list})
+    df_trans = pd.DataFrame({"sim": sim_list, "trans": trans_list})
     return df_trans
 
 
 def count_clust_transition(
-        df,
-        dt=None,
-        sim_name_col="sim",
-        clust_col='clust',
-        time_ax_name=r"$Time\;(\mu s)$"):
+    df, dt=None, sim_name_col="sim", clust_col="clust", time_ax_name=r"$Time\;(\mu s)$"
+):
 
     sim_list = df[sim_name_col].unique()
     trans_list = []
-    
+
     for sim in sim_list:
 
         sim_df = df[df[sim_name_col] == sim]
@@ -1389,33 +1454,38 @@ def count_clust_transition(
             dt_steps = step_gap * dt_sim
 
         max_time = len(sim_df) * dt_steps / 1e6
-        logger.info(f"Computed max time: {max_time:.3f}, df max time: {sim_df[time_ax_name].iloc[-1]:.3f}")
+        logger.info(
+            f"Computed max time: {max_time:.3f}, df max time: {sim_df[time_ax_name].iloc[-1]:.3f}"
+        )
 
         trans_freq = clust_num / max_time
 
-        logger.info(f'sim: {sim:20}  clust num={clust_num:6}  clust_freq = {trans_freq:.2f}/us')
+        logger.info(
+            f"sim: {sim:20}  clust num={clust_num:6}  clust_freq = {trans_freq:.2f}/us"
+        )
         trans_list.append(trans_freq)
 
-
-    df_trans = pd.DataFrame({'sim': sim_list, 'trans': trans_list})
+    df_trans = pd.DataFrame({"sim": sim_list, "trans": trans_list})
     return df_trans
 
 
-def compare_weight_RMSD(df,
-        x=r"$Time\;(\mu s)$",
-        hue='sim',
-        ener='new_pot',
-        time_ax_name=r"$Time\;(\mu s)$",
-        max_data=50000):
+def compare_weight_RMSD(
+    df,
+    x=r"$Time\;(\mu s)$",
+    hue="sim",
+    ener="new_pot",
+    time_ax_name=r"$Time\;(\mu s)$",
+    max_data=50000,
+):
 
     local_df = filter_df(df, max_data)
-    temp_list = local_df['Aim Temp (K)'].unique()
+    temp_list = local_df["Aim Temp (K)"].unique()
     temp_list.sort()
 
     # Compute overall avg
     temp_avg_dict = {}
     for temp in temp_list:
-        temp_avg_dict[temp] = local_df[local_df['Aim Temp (K)'] == temp][ener].mean()
+        temp_avg_dict[temp] = local_df[local_df["Aim Temp (K)"] == temp][ener].mean()
     logger.info(temp_avg_dict)
 
     group_list = local_df["group"].unique()
@@ -1433,10 +1503,9 @@ def compare_weight_RMSD(df,
             sim_df = group_df[group_df[hue] == sim]
             sim_df = compute_moving_average(sim_df, ener=ener)
 
-            compute_weight_RMSD(
-                sim_df, final_weight_dict=temp_avg_dict, ener=ener)
+            compute_weight_RMSD(sim_df, final_weight_dict=temp_avg_dict, ener=ener)
 
-            #sns.lineplot(
+            # sns.lineplot(
             #    data=sim_df,
             #    x=time_ax_name,
             #    y='Weight RMSD',
@@ -1444,37 +1513,35 @@ def compare_weight_RMSD(df,
             #    lw=2)
 
             local_weight_df = pd.DataFrame(
-                {'Weight RMSD': sim_df[sim_df['Weight RMSD'].notna()]['Weight RMSD'],
-                 time_ax_name: sim_df[sim_df['Weight RMSD'].notna()][time_ax_name],
-                 'group': group,
-                 'sim': sim,
-                })
-
+                {
+                    "Weight RMSD": sim_df[sim_df["Weight RMSD"].notna()]["Weight RMSD"],
+                    time_ax_name: sim_df[sim_df["Weight RMSD"].notna()][time_ax_name],
+                    "group": group,
+                    "sim": sim,
+                }
+            )
 
             local_weight_df[time_ax_name] = local_weight_df[time_ax_name].round(2)
             local_weight_df = local_weight_df.drop_duplicates(subset=[time_ax_name])
 
             sns.lineplot(
-                data=local_weight_df,
-                x=time_ax_name,
-                y='Weight RMSD',
-                label=sim,
-                lw=0.5)
-
+                data=local_weight_df, x=time_ax_name, y="Weight RMSD", label=sim, lw=0.5
+            )
 
             rmsd_df = pd.concat([rmsd_df, local_weight_df])
 
-            #print(sim_df[sim_df['Weight RMSD'].notna()])
+            # print(sim_df[sim_df['Weight RMSD'].notna()])
 
     # Need to round time column, for a better averaging
-    #rmsd_df[time_ax_name] = rmsd_df[time_ax_name].round(2)
+    # rmsd_df[time_ax_name] = rmsd_df[time_ax_name].round(2)
     sns.lineplot(
-                data=rmsd_df,
-                x=time_ax_name,
-                y='Weight RMSD',
-                hue='group',
-                #label=sim,
-                lw=2)
+        data=rmsd_df,
+        x=time_ax_name,
+        y="Weight RMSD",
+        hue="group",
+        # label=sim,
+        lw=2,
+    )
 
     plt.ylabel(r"RMSD $(KJ.mol^{-1})$")
     plt.title(r"Weights $f_i$ RMSD")
@@ -1482,84 +1549,108 @@ def compare_weight_RMSD(df,
     return rmsd_df
 
 
-
-def plot_energie_swap_convergence(df, ener_name="new_pot", lag_num = 4,
-    time_ax_name=r"$Time\;(\mu s)$", ylabel=r'$E_{p}$',
-    split_graph=False, ci=95, avg_start=None):
-
+def plot_energie_swap_convergence(
+    df,
+    ener_name="new_pot",
+    lag_num=4,
+    time_ax_name=r"$Time\;(\mu s)$",
+    ylabel=r"$E_{p}$",
+    split_graph=False,
+    ci=95,
+    avg_start=None,
+):
 
     time_step = df.loc[1, time_ax_name] - df.loc[0, time_ax_name]
-    temp_list = df['Aim Temp (K)'].unique()
+    temp_list = df["Aim Temp (K)"].unique()
     temp_list.sort()
 
     for temp_index in range(len(temp_list)):
 
         if avg_start is None:
-            avg_ener = df[
-                df["Aim Temp (K)"] == temp_list[temp_index]][ener_name].mean()
+            avg_ener = df[df["Aim Temp (K)"] == temp_list[temp_index]][ener_name].mean()
         else:
             avg_ener = df[
-                (df["Aim Temp (K)"] == temp_list[temp_index]) &
-                ((df["Temp Change index"] <= avg_start) |
-                 (df["Temp Change index"] >= -avg_start))][ener_name].mean()
+                (df["Aim Temp (K)"] == temp_list[temp_index])
+                & (
+                    (df["Temp Change index"] <= avg_start)
+                    | (df["Temp Change index"] >= -avg_start)
+                )
+            ][ener_name].mean()
 
-
-        #lag_num = 300
+        # lag_num = 300
         df_local = df.loc[
-            (df["Aim Temp (K)"] == temp_list[temp_index]) &
-            (df["Temp Change index"] <= lag_num) &
-            (df["Temp Change index"] >= -lag_num),
-            ["Temp Change index", ener_name]]
+            (df["Aim Temp (K)"] == temp_list[temp_index])
+            & (df["Temp Change index"] <= lag_num)
+            & (df["Temp Change index"] >= -lag_num),
+            ["Temp Change index", ener_name],
+        ]
 
         df_local.loc[:, "Time change"] = df_local["Temp Change index"] * time_step * 1e6
-        df_local.loc.__setitem__((slice(None), ("Time change")), df_local["Temp Change index"] * time_step * 1e6)
+        df_local.loc.__setitem__(
+            (slice(None), ("Time change")),
+            df_local["Temp Change index"] * time_step * 1e6,
+        )
         df_local_pos = df_local[df_local["Temp Change index"] > 0]
         df_local_neg = df_local[df_local["Temp Change index"] < 0]
         # df_local_neg.loc[:, "Time change"] = -1 * df_local_neg["Time change"]
-        # To avoid warning, Replace by: 
-        df_local_neg.loc.__setitem__((slice(None), ("Time change")), -1 * df_local_neg["Time change"])
-
+        # To avoid warning, Replace by:
+        df_local_neg.loc.__setitem__(
+            (slice(None), ("Time change")), -1 * df_local_neg["Time change"]
+        )
 
         if temp_index > 0:
             sns.lineplot(
                 data=df_local_pos,
                 x="Time change",
                 y=ener_name,
-                markers=True, dashes=False,
+                markers=True,
+                dashes=False,
                 ci=ci,
-                label=f"E at {temp_list[temp_index]:.2f} K from {temp_list[temp_index-1]:.2f} K"
+                label=f"E at {temp_list[temp_index]:.2f} K from {temp_list[temp_index-1]:.2f} K",
             )
 
         if temp_index < (len(temp_list) - 1):
             sns.lineplot(
                 data=df_local_neg,
                 x="Time change",
-                markers=True, dashes=False,
+                markers=True,
+                dashes=False,
                 y=ener_name,
                 ci=ci,
-                label=f"E at {temp_list[temp_index]:.2f} K from {temp_list[temp_index+1]:.2f} K"
+                label=f"E at {temp_list[temp_index]:.2f} K from {temp_list[temp_index+1]:.2f} K",
             )
 
         plt.xlabel("time (ps)")
         plt.ylabel(ylabel)
         plt.title(f"Energy after temperature change")
 
-
-        plt.axhline(avg_ener, label=f'avg Epot at {temp_list[temp_index]:.2f} K', linestyle=":", c='gray')
+        plt.axhline(
+            avg_ener,
+            label=f"avg Epot at {temp_list[temp_index]:.2f} K",
+            linestyle=":",
+            c="gray",
+        )
         plt.legend(bbox_to_anchor=(1.01, 1.0))
 
         if split_graph:
             plt.show()
 
 
-def plot_energie_swap_convergence_diff(df, ener_name="new_pot", lag_num = 4,
-    time_ax_name=r"$Time\;(\mu s)$", ylabel=r'$E_{p}$',
-    hue=None, color=None, label=r"$T_{m-1}$ update to $T_{m}$",
-    errorbar=('ci', 95), avg_start=None):
-
+def plot_energie_swap_convergence_diff(
+    df,
+    ener_name="new_pot",
+    lag_num=4,
+    time_ax_name=r"$Time\;(\mu s)$",
+    ylabel=r"$E_{p}$",
+    hue=None,
+    color=None,
+    label=r"$T_{m-1}$ update to $T_{m}$",
+    errorbar=("ci", 95),
+    avg_start=None,
+):
 
     time_step = df.loc[1, time_ax_name] - df.loc[0, time_ax_name]
-    temp_list = df['Aim Temp (K)'].unique()
+    temp_list = df["Aim Temp (K)"].unique()
     temp_list.sort()
 
     avg_ener_dict = {}
@@ -1569,16 +1660,17 @@ def plot_energie_swap_convergence_diff(df, ener_name="new_pot", lag_num = 4,
     for temp in temp_list:
 
         if avg_start is None:
-            avg_ener = df[
-                df["Aim Temp (K)"] == temp][ener_name].mean()
+            avg_ener = df[df["Aim Temp (K)"] == temp][ener_name].mean()
         else:
             avg_ener = df[
-                (df["Aim Temp (K)"] == temp) &
-                ((df["Temp Change index"] <= avg_start) |
-                 (df["Temp Change index"] >= -avg_start))][ener_name].mean()
+                (df["Aim Temp (K)"] == temp)
+                & (
+                    (df["Temp Change index"] <= avg_start)
+                    | (df["Temp Change index"] >= -avg_start)
+                )
+            ][ener_name].mean()
 
         avg_ener_dict[temp] = avg_ener
-
 
     print(avg_ener_dict)
 
@@ -1592,36 +1684,31 @@ def plot_energie_swap_convergence_diff(df, ener_name="new_pot", lag_num = 4,
 
     print("Compute Energy difference to average")
     energie_diff_list = []
-    for temp, ener in zip(
-            df['Aim Temp (K)'], 
-            df[ener_name]):
-        
+    for temp, ener in zip(df["Aim Temp (K)"], df[ener_name]):
+
         ener_diff = ener - avg_ener_dict[temp]
         energie_diff_list.append(ener_diff)
-    
+
     df["Energie Diff"] = energie_diff_list
 
-    df_pos = df[
-        (df["Temp Change index"] > 0) &
-        (df["Temp Change index"] < lag_num)]
-    df_neg = df[
-        (df["Temp Change index"] < 0) &
-        (df["Temp Change index"] > -lag_num)]
+    df_pos = df[(df["Temp Change index"] > 0) & (df["Temp Change index"] < lag_num)]
+    df_neg = df[(df["Temp Change index"] < 0) & (df["Temp Change index"] > -lag_num)]
 
     df_neg.loc[:, "Time change"] *= -1
 
-    print('Plot graph')
+    print("Plot graph")
 
     sns.lineplot(
         data=df_pos,
         x="Time change",
         y="Energie Diff",
         hue=hue,
-        markers=True, dashes=False,
+        markers=True,
+        dashes=False,
         errorbar=errorbar,
-        linestyle='--',
+        linestyle="--",
         color=color,
-        label=None
+        label=None,
     )
 
     sns.lineplot(
@@ -1629,10 +1716,11 @@ def plot_energie_swap_convergence_diff(df, ener_name="new_pot", lag_num = 4,
         x="Time change",
         y="Energie Diff",
         hue=hue,
-        markers=True, dashes=False,
+        markers=True,
+        dashes=False,
         errorbar=errorbar,
         color=color,
-        label=label
+        label=label,
     )
 
     plt.xlabel(r"time $(ps)$")
@@ -1641,17 +1729,22 @@ def plot_energie_swap_convergence_diff(df, ener_name="new_pot", lag_num = 4,
     plt.legend(bbox_to_anchor=(1.01, 1.0))
 
 
-def plot_energie_swap_distri_diff(df, lag_num_list, ener_name="new_pot",
-        time_ax_name=r"$Time\;(\mu s)$",
-        temp_index=1,
-        ylabel=r'$E_{p}$',
-        hue=None, bins=100,
-        element="step",
-        ci=95, avg_start=0):
-
+def plot_energie_swap_distri_diff(
+    df,
+    lag_num_list,
+    ener_name="new_pot",
+    time_ax_name=r"$Time\;(\mu s)$",
+    temp_index=1,
+    ylabel=r"$E_{p}$",
+    hue=None,
+    bins=100,
+    element="step",
+    ci=95,
+    avg_start=0,
+):
 
     time_step = df.loc[1, time_ax_name] - df.loc[0, time_ax_name]
-    temp_list = df['Aim Temp (K)'].unique()
+    temp_list = df["Aim Temp (K)"].unique()
     temp_list.sort()
 
     # Compute time change:
@@ -1661,91 +1754,126 @@ def plot_energie_swap_distri_diff(df, lag_num_list, ener_name="new_pot",
 
     df["update (ps)"] = time_change_list
 
-    print('Plot graph')
+    print("Plot graph")
 
     fig, ax1 = plt.subplots()
 
     sns.histplot(
-        df[(df["Aim Temp (K)"] == temp_list[temp_index]) &
-           ((df["Temp Change index"] > avg_start) | (df["Temp Change index"] < -avg_start))],
+        df[
+            (df["Aim Temp (K)"] == temp_list[temp_index])
+            & (
+                (df["Temp Change index"] > avg_start)
+                | (df["Temp Change index"] < -avg_start)
+            )
+        ],
         stat="density",
         kde=True,
-        bins=bins, fill=False,
-        x=ener_name, common_norm=False,
-        linewidth=1, alpha=0.3,
-        element='step',
-        color='black',
+        bins=bins,
+        fill=False,
+        x=ener_name,
+        common_norm=False,
+        linewidth=1,
+        alpha=0.3,
+        element="step",
+        color="black",
         label=temp_list[temp_index],
-        line_kws={'linestyle':'-'},
-        ax=ax1)
+        line_kws={"linestyle": "-"},
+        ax=ax1,
+    )
 
     sns.histplot(
-        df[(df["Aim Temp (K)"] == temp_list[temp_index-1]) &
-           ((df["Temp Change index"] > avg_start) | (df["Temp Change index"] < -avg_start))],
+        df[
+            (df["Aim Temp (K)"] == temp_list[temp_index - 1])
+            & (
+                (df["Temp Change index"] > avg_start)
+                | (df["Temp Change index"] < -avg_start)
+            )
+        ],
         stat="density",
         kde=True,
-        bins=bins, fill=False,
-        x=ener_name, common_norm=False,
-        linewidth=1, alpha=0.3,
-        element='step',
-        color='black',
-        label=temp_list[temp_index-1],
-        line_kws={'linestyle':'--'},
-        ax=ax1)
+        bins=bins,
+        fill=False,
+        x=ener_name,
+        common_norm=False,
+        linewidth=1,
+        alpha=0.3,
+        element="step",
+        color="black",
+        label=temp_list[temp_index - 1],
+        line_kws={"linestyle": "--"},
+        ax=ax1,
+    )
 
     sns.histplot(
-        df[(df["Aim Temp (K)"] == temp_list[temp_index+1]) &
-           ((df["Temp Change index"] > avg_start) | (df["Temp Change index"] < -avg_start))],
+        df[
+            (df["Aim Temp (K)"] == temp_list[temp_index + 1])
+            & (
+                (df["Temp Change index"] > avg_start)
+                | (df["Temp Change index"] < -avg_start)
+            )
+        ],
         stat="density",
         kde=True,
-        bins=bins, fill=False,
-        x=ener_name, common_norm=False,
-        linewidth=1, alpha=0.3,
-        element='step',
-        color='black',
-        line_kws={'linestyle':':'},
-        label=temp_list[temp_index+1],
-        ax=ax1)
+        bins=bins,
+        fill=False,
+        x=ener_name,
+        common_norm=False,
+        linewidth=1,
+        alpha=0.3,
+        element="step",
+        color="black",
+        line_kws={"linestyle": ":"},
+        label=temp_list[temp_index + 1],
+        ax=ax1,
+    )
 
     df_pos = df[
-        (df["Aim Temp (K)"] == temp_list[temp_index]) &
-        (df["Temp Change index"].isin(lag_num_list))]
+        (df["Aim Temp (K)"] == temp_list[temp_index])
+        & (df["Temp Change index"].isin(lag_num_list))
+    ]
     df_pos["update (ps)"] = pd.Categorical(df_pos["update (ps)"])
 
     sns.histplot(
-        df_pos, stat="density",
+        df_pos,
+        stat="density",
         kde=True,
-        bins=bins, fill=False,
-        x=ener_name, common_norm=False,
-        linewidth=1, alpha=0.3,
+        bins=bins,
+        fill=False,
+        x=ener_name,
+        common_norm=False,
+        linewidth=1,
+        alpha=0.3,
         hue="update (ps)",
-        element='step',
-        line_kws={'linestyle':'--'},
-        ax=ax1)
+        element="step",
+        line_kws={"linestyle": "--"},
+        ax=ax1,
+    )
 
     df_neg = df.loc[
-        (df["Aim Temp (K)"] == temp_list[temp_index]) &
-        (df["Temp Change index"].isin([-lag for lag in lag_num_list]))]
+        (df["Aim Temp (K)"] == temp_list[temp_index])
+        & (df["Temp Change index"].isin([-lag for lag in lag_num_list]))
+    ]
     df_neg["update (ps)"] *= -1
     df_neg["update (ps)"] = pd.Categorical(df_neg["update (ps)"])
 
     sns.histplot(
-        df_neg, stat="density",
+        df_neg,
+        stat="density",
         kde=True,
-        bins=bins, fill=False,
-        x=ener_name, common_norm=False,
-        linewidth=1, alpha=0.3,
+        bins=bins,
+        fill=False,
+        x=ener_name,
+        common_norm=False,
+        linewidth=1,
+        alpha=0.3,
         hue="update (ps)",
-        element='step',
-        line_kws={'linestyle':':'},
-        ax=ax1)
+        element="step",
+        line_kws={"linestyle": ":"},
+        ax=ax1,
+    )
 
-    sns.move_legend(
-        ax1,
-        "upper left",
-        bbox_to_anchor=(1, 1),
-        title_fontsize=9)
-    #ax1.legend(bbox_to_anchor=(1.01, 1.0))
+    sns.move_legend(ax1, "upper left", bbox_to_anchor=(1, 1), title_fontsize=9)
+    # ax1.legend(bbox_to_anchor=(1.01, 1.0))
 
     legend = ax1.get_legend()
     handles = legend.legendHandles
@@ -1755,15 +1883,21 @@ def plot_energie_swap_distri_diff(df, lag_num_list, ener_name="new_pot",
         h.set_alpha(1.0)
 
     e_min, e_max = get_quant_min_max(
-        df[df["Aim Temp (K)"] == temp_list[temp_index]][ener_name],
-        quant=0.01)
+        df[df["Aim Temp (K)"] == temp_list[temp_index]][ener_name], quant=0.01
+    )
 
     ymin, ymax = ax1.get_ylim()
-    y_text = ymax - (ymax-ymin)/20
+    y_text = ymax - (ymax - ymin) / 20
 
     plt.annotate(f"{round(temp_list[temp_index-1],1)} K", xy=(e_min, y_text))
-    plt.annotate(f"{round(temp_list[temp_index],1)} K", xy=(e_min + (e_max-e_min)/2 - (e_max-e_min)/10, y_text))
-    plt.annotate(f"{round(temp_list[temp_index+1],1)} K", xy=(e_max - (e_max-e_min)/5.5, y_text))
+    plt.annotate(
+        f"{round(temp_list[temp_index],1)} K",
+        xy=(e_min + (e_max - e_min) / 2 - (e_max - e_min) / 10, y_text),
+    )
+    plt.annotate(
+        f"{round(temp_list[temp_index+1],1)} K",
+        xy=(e_max - (e_max - e_min) / 5.5, y_text),
+    )
 
     plt.xlim(e_min, e_max)
     plt.xlabel(ylabel)

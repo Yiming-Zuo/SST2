@@ -26,15 +26,11 @@ from .datafiles import PDB_PROT_PEP_SOL, PDB_5AWL, PDB_2HPL
 def test_peptide_protein_complex_scratch(tmp_path):
 
     OUT_PATH = tmp_path
-    name = 'tmp'
+    name = "tmp"
 
-    tools.prepare_pdb(
-        PDB_2HPL,
-        f"{OUT_PATH}/{name}_fixed.cif",
-        pH=7.0,
-        overwrite=False)
+    tools.prepare_pdb(PDB_2HPL, f"{OUT_PATH}/{name}_fixed.cif", pH=7.0, overwrite=False)
 
-    forcefield_files = ['amber14/protein.ff14SB.xml', 'amber14/tip3p.xml']
+    forcefield_files = ["amber14/protein.ff14SB.xml", "amber14/tip3p.xml"]
     forcefield = app.ForceField(*forcefield_files)
 
     tools.create_water_box(
@@ -42,7 +38,8 @@ def test_peptide_protein_complex_scratch(tmp_path):
         f"{OUT_PATH}/{name}_water.cif",
         pad=1.5,
         forcefield=forcefield,
-        overwrite=False)
+        overwrite=False,
+    )
 
     cif = app.PDBxFile(f"{OUT_PATH}/{name}_water.cif")
 
@@ -55,13 +52,17 @@ def test_peptide_protein_complex_scratch(tmp_path):
 
     # Get indices of the three sets of atoms.
     all_indices = [int(i.index) for i in cif.topology.atoms()]
-    solute_indices = [int(i.index) for i in cif.topology.atoms() if i.residue.chain.id in ["B"]]
+    solute_indices = [
+        int(i.index) for i in cif.topology.atoms() if i.residue.chain.id in ["B"]
+    ]
 
-    system = tools.create_sim_system(cif,
+    system = tools.create_sim_system(
+        cif,
         temp=temperature,
         forcefield=forcefield,
         h_mass=hydrogenMass,
-        base_force_group=1)
+        base_force_group=1,
+    )
 
     sys_rest2 = rest2.REST2(
         system=system,
@@ -70,17 +71,17 @@ def test_peptide_protein_complex_scratch(tmp_path):
         solute_index=solute_indices,
         integrator=integrator,
         temperature=temperature,
-        dt=dt)
-
+        dt=dt,
+    )
 
     assert sys_rest2.system.getNumForces() == 9
     assert sys_rest2.solute_index == solute_indices
     assert len(sys_rest2.solute_index) == 74
-    assert len(sys_rest2.solvent_index) == pytest.approx(
-        14305, 0.1
-    )
+    assert len(sys_rest2.solvent_index) == pytest.approx(14305, 0.1)
     assert sys_rest2.scale == 1.0
-    assert len(sys_rest2.init_nb_param) == len(sys_rest2.solute_index) + len(sys_rest2.solvent_index)
+    assert len(sys_rest2.init_nb_param) == len(sys_rest2.solute_index) + len(
+        sys_rest2.solvent_index
+    )
     assert len(sys_rest2.init_nb_exept_index) == 387
     assert len(sys_rest2.init_nb_exept_value) == 387
     assert len(sys_rest2.init_nb_exept_solute_value) == 387
@@ -126,27 +127,37 @@ def test_peptide_protein_complex(tmp_path):
     tools.print_forces(system, simulation)
     forces_sys = tools.get_forces(system, simulation)
 
-    HarmonicBondForce_sys = tools.get_specific_forces(system, simulation, "HarmonicBondForce")[0]
+    HarmonicBondForce_sys = tools.get_specific_forces(
+        system, simulation, "HarmonicBondForce"
+    )[0]
     assert 1339.07153 == pytest.approx(
         HarmonicBondForce_sys.value_in_unit(unit.kilojoule_per_mole), tolerance
     )
 
-    HarmonicAngleForce_sys  = tools.get_specific_forces(system, simulation, "HarmonicAngleForce")[0]
+    HarmonicAngleForce_sys = tools.get_specific_forces(
+        system, simulation, "HarmonicAngleForce"
+    )[0]
     assert 3484.75097 == pytest.approx(
         HarmonicAngleForce_sys.value_in_unit(unit.kilojoule_per_mole), tolerance
     )
 
-    NonbondedForce_sys  = tools.get_specific_forces(system, simulation, "NonbondedForce")[0]
+    NonbondedForce_sys = tools.get_specific_forces(
+        system, simulation, "NonbondedForce"
+    )[0]
     assert -192565.3092 == pytest.approx(
         NonbondedForce_sys.value_in_unit(unit.kilojoule_per_mole), tolerance
     )
 
-    PeriodicTorsionForce_sys  = tools.get_specific_forces(system, simulation, "PeriodicTorsionForce")[0]
+    PeriodicTorsionForce_sys = tools.get_specific_forces(
+        system, simulation, "PeriodicTorsionForce"
+    )[0]
     assert 5415.10546 == pytest.approx(
         PeriodicTorsionForce_sys.value_in_unit(unit.kilojoule_per_mole), tolerance
     )
 
-    CMMotionRemover_sys = tools.get_specific_forces(system, simulation, "CMMotionRemover")[0]
+    CMMotionRemover_sys = tools.get_specific_forces(
+        system, simulation, "CMMotionRemover"
+    )[0]
     assert 0.0 == CMMotionRemover_sys.value_in_unit(unit.kilojoule_per_mole)
 
     assert -182326.38123 == pytest.approx(
@@ -172,27 +183,37 @@ def test_peptide_protein_complex(tmp_path):
     tools.print_forces(system_pep, simulation_pep)
     forces_solute = tools.get_forces(system_pep, simulation_pep)
 
-    HarmonicBondForce_solute = tools.get_specific_forces(system_pep, simulation_pep, "HarmonicBondForce")[0]
+    HarmonicBondForce_solute = tools.get_specific_forces(
+        system_pep, simulation_pep, "HarmonicBondForce"
+    )[0]
     assert 55.969520 == pytest.approx(
         HarmonicBondForce_solute.value_in_unit(unit.kilojoule_per_mole), tolerance
     )
 
-    HarmonicAngleForce_solute  = tools.get_specific_forces(system_pep, simulation_pep, "HarmonicAngleForce")[0]
+    HarmonicAngleForce_solute = tools.get_specific_forces(
+        system_pep, simulation_pep, "HarmonicAngleForce"
+    )[0]
     assert 123.60030 == pytest.approx(
         HarmonicAngleForce_solute.value_in_unit(unit.kilojoule_per_mole), tolerance
     )
 
-    NonbondedForce_solute  = tools.get_specific_forces(system_pep, simulation_pep, "NonbondedForce")[0]
+    NonbondedForce_solute = tools.get_specific_forces(
+        system_pep, simulation_pep, "NonbondedForce"
+    )[0]
     assert -451.44809 == pytest.approx(
         NonbondedForce_solute.value_in_unit(unit.kilojoule_per_mole), tolerance
     )
 
-    PeriodicTorsionForce_solute  = tools.get_specific_forces(system_pep, simulation_pep, "PeriodicTorsionForce")[0]
+    PeriodicTorsionForce_solute = tools.get_specific_forces(
+        system_pep, simulation_pep, "PeriodicTorsionForce"
+    )[0]
     assert 200.288879 == pytest.approx(
         PeriodicTorsionForce_solute.value_in_unit(unit.kilojoule_per_mole), tolerance
     )
 
-    CMMotionRemover_solute = tools.get_specific_forces(system_pep, simulation_pep, "CMMotionRemover")[0]
+    CMMotionRemover_solute = tools.get_specific_forces(
+        system_pep, simulation_pep, "CMMotionRemover"
+    )[0]
     assert 0.0 == CMMotionRemover_solute.value_in_unit(unit.kilojoule_per_mole)
 
     assert -71.589387 == pytest.approx(
@@ -218,27 +239,37 @@ def test_peptide_protein_complex(tmp_path):
     tools.print_forces(system_no_pep, simulation_no_pep)
     forces_solvent = tools.get_forces(system_no_pep, simulation_no_pep)
 
-    HarmonicBondForce_solvent = tools.get_specific_forces(system_no_pep, simulation_no_pep, "HarmonicBondForce")[0]
+    HarmonicBondForce_solvent = tools.get_specific_forces(
+        system_no_pep, simulation_no_pep, "HarmonicBondForce"
+    )[0]
     assert 1283.102050 == pytest.approx(
         HarmonicBondForce_solvent.value_in_unit(unit.kilojoule_per_mole), tolerance
     )
 
-    HarmonicAngleForce_solvent = tools.get_specific_forces(system_no_pep, simulation_no_pep, "HarmonicAngleForce")[0]
+    HarmonicAngleForce_solvent = tools.get_specific_forces(
+        system_no_pep, simulation_no_pep, "HarmonicAngleForce"
+    )[0]
     assert 3361.15087 == pytest.approx(
         HarmonicAngleForce_solvent.value_in_unit(unit.kilojoule_per_mole), tolerance
     )
 
-    NonbondedForce_solvent = tools.get_specific_forces(system_no_pep, simulation_no_pep, "NonbondedForce")[0]
+    NonbondedForce_solvent = tools.get_specific_forces(
+        system_no_pep, simulation_no_pep, "NonbondedForce"
+    )[0]
     assert -189514.66834 == pytest.approx(
         NonbondedForce_solvent.value_in_unit(unit.kilojoule_per_mole), tolerance
     )
 
-    PeriodicTorsionForce_solvent = tools.get_specific_forces(system_no_pep, simulation_no_pep, "PeriodicTorsionForce")[0]
+    PeriodicTorsionForce_solvent = tools.get_specific_forces(
+        system_no_pep, simulation_no_pep, "PeriodicTorsionForce"
+    )[0]
     assert 5214.81640 == pytest.approx(
         PeriodicTorsionForce_solvent.value_in_unit(unit.kilojoule_per_mole), tolerance
     )
 
-    CMMotionRemover_solvent = tools.get_specific_forces(system_no_pep, simulation_no_pep, "CMMotionRemover")[0]
+    CMMotionRemover_solvent = tools.get_specific_forces(
+        system_no_pep, simulation_no_pep, "CMMotionRemover"
+    )[0]
     assert 0.0 == CMMotionRemover_solvent.value_in_unit(unit.kilojoule_per_mole)
 
     assert -179655.59901 == pytest.approx(
@@ -284,20 +315,23 @@ def test_peptide_protein_complex(tmp_path):
     forces_rest2 = tools.get_forces(test.system, test.simulation)
 
     HarmonicBondForce_rest2 = tools.get_specific_forces(
-        test.system, test.simulation, "HarmonicBondForce")[0]
-    HarmonicAngleForce_rest2  = tools.get_specific_forces(
-        test.system, test.simulation, "HarmonicAngleForce")[0]
-    NonbondedForce_rest2  = tools.get_specific_forces(
-        test.system, test.simulation, "NonbondedForce")[0]
-    CustomTorsionForce_rest2  = tools.get_specific_forces(
-        test.system, test.simulation, "CustomTorsionForce")
-    CustomTorsionForce_rest2_sum  = np.sum(CustomTorsionForce_rest2)
+        test.system, test.simulation, "HarmonicBondForce"
+    )[0]
+    HarmonicAngleForce_rest2 = tools.get_specific_forces(
+        test.system, test.simulation, "HarmonicAngleForce"
+    )[0]
+    NonbondedForce_rest2 = tools.get_specific_forces(
+        test.system, test.simulation, "NonbondedForce"
+    )[0]
+    CustomTorsionForce_rest2 = tools.get_specific_forces(
+        test.system, test.simulation, "CustomTorsionForce"
+    )
+    CustomTorsionForce_rest2_sum = np.sum(CustomTorsionForce_rest2)
 
     print("Compare not scaled energy rest2 vs. classic:\n")
     # HarmonicBondForce
     assert (
-        pytest.approx(HarmonicBondForce_rest2 / HarmonicBondForce_sys, tolerance)
-        == 1.0
+        pytest.approx(HarmonicBondForce_rest2 / HarmonicBondForce_sys, tolerance) == 1.0
     )
     # HarmonicAngleForce
     assert (
@@ -305,13 +339,11 @@ def test_peptide_protein_complex(tmp_path):
         == 1.0
     )
     # NonbondedForce
-    assert (
-        pytest.approx(NonbondedForce_rest2 / NonbondedForce_sys, tolerance)
-        == 1.0
-    )
+    assert pytest.approx(NonbondedForce_rest2 / NonbondedForce_sys, tolerance) == 1.0
     # CustomTorsionForce
     assert (
-        pytest.approx(CustomTorsionForce_rest2_sum / PeriodicTorsionForce_sys,
+        pytest.approx(
+            CustomTorsionForce_rest2_sum / PeriodicTorsionForce_sys,
             tolerance,
         )
         == 1.0
@@ -371,11 +403,7 @@ def test_peptide_protein_complex(tmp_path):
     # check E_solvent_solute_nb
     assert (
         pytest.approx(
-            (
-                NonbondedForce_rest2
-                - NonbondedForce_solvent
-                - NonbondedForce_solute
-            )
+            (NonbondedForce_rest2 - NonbondedForce_solvent - NonbondedForce_solute)
             / solvent_solute_nb,
             tolerance,
         )
@@ -383,7 +411,7 @@ def test_peptide_protein_complex(tmp_path):
     )
 
     # Compare REST2 solute and solvent simulation with previous classic simulation
-    solute_force, solvent_force = test.compute_solute_solvent_system_energy()
+    solute_force, solvent_force, all_force = test.compute_solute_solvent_system_energy()
     print(f"Solute Force")
     for i, force in solute_force.items():
         print(
@@ -420,14 +448,19 @@ def test_peptide_protein_complex(tmp_path):
                 f"{i}   {force['name']:25} {force['energy'].value_in_unit(unit.kilojoule_per_mole):.2f} KJ/mol"
             )
             if scale != 1.0:
-                if force['name'] in ['NonbondedForce', 'Total']:  # NonbondedForce, Total
+                if force["name"] in [
+                    "NonbondedForce",
+                    "Total",
+                ]:  # NonbondedForce, Total
                     assert (
                         pytest.approx(
                             force["energy"] / forces_rest2[i]["energy"], tolerance
                         )
                         != 1.0
                     )
-                elif force['name'] == "CustomTorsionForce" and i in [4]:  # CustomTorsionForce scaled
+                elif force["name"] == "CustomTorsionForce" and i in [
+                    4
+                ]:  # CustomTorsionForce scaled
                     assert (
                         pytest.approx(
                             (force["energy"] / scale) / forces_rest2[i]["energy"],
@@ -435,7 +468,10 @@ def test_peptide_protein_complex(tmp_path):
                         )
                         == 1.0
                     )
-                elif force['name'] in ['HarmonicBondForce', 'HarmonicAngleForce'] or i in [
+                elif force["name"] in [
+                    "HarmonicBondForce",
+                    "HarmonicAngleForce",
+                ] or i in [
                     5,
                     6,
                 ]:  # HarmonicBondForce, HarmonicAngleForce, CustomTorsionForces not scaled
@@ -445,7 +481,13 @@ def test_peptide_protein_complex(tmp_path):
                         )
                         == 1.0
                     )
-            elif force['name'] in ['HarmonicBondForce', 'HarmonicAngleForce', 'NonbondedForce', "CustomTorsionForce", 'Total']:
+            elif force["name"] in [
+                "HarmonicBondForce",
+                "HarmonicAngleForce",
+                "NonbondedForce",
+                "CustomTorsionForce",
+                "Total",
+            ]:
                 assert (
                     pytest.approx(
                         (force["energy"] / scale) / forces_rest2[i]["energy"], tolerance
@@ -479,20 +521,25 @@ def test_peptide_protein_complex(tmp_path):
         (
             solute_force_new,
             solvent_force_new,
+            all_force_new,
         ) = test.compute_solute_solvent_system_energy()
         print(f"Solute Force")
         for i, force in solute_force_new.items():
             print(
                 f"{i}   {force['name']:25} {force['energy'].value_in_unit(unit.kilojoule_per_mole):.2f} KJ/mol {forces_solute[i]['energy']}"
             )
-            if force['name'] in ['HarmonicBondForce', 'HarmonicAngleForce', 'PeriodicTorsionForce']:  # HarmonicBondForce, HarmonicAngleForce, CustomTorsionForces not scaled
+            if force["name"] in [
+                "HarmonicBondForce",
+                "HarmonicAngleForce",
+                "PeriodicTorsionForce",
+            ]:  # HarmonicBondForce, HarmonicAngleForce, CustomTorsionForces not scaled
                 assert (
                     pytest.approx(
                         force["energy"] / forces_solute[i]["energy"], tolerance
                     )
                     == 1.0
                 )
-            if force['name'] in ['NonbondedForce']:  # NonbondedForce
+            if force["name"] in ["NonbondedForce"]:  # NonbondedForce
                 assert (
                     pytest.approx(
                         (force["energy"] / scale) / forces_solute[i]["energy"],
@@ -523,10 +570,7 @@ def test_peptide_protein_complex(tmp_path):
                 break
         assert (
             pytest.approx(
-                (
-                    (forces_rest2_new[4]["energy"] + solute_nonbonded_new)
-                    / scale
-                )
+                ((forces_rest2_new[4]["energy"] + solute_nonbonded_new) / scale)
                 / E_solute_scaled_new,
                 tolerance,
             )
@@ -540,10 +584,7 @@ def test_peptide_protein_complex(tmp_path):
                 solute_nonbonded_new += force["energy"]
         assert (
             pytest.approx(
-                (
-                    forces_rest2_new[5]["energy"]
-                    + solute_nonbonded_new
-                )
+                (forces_rest2_new[5]["energy"] + solute_nonbonded_new)
                 / E_solute_not_scaled_new,
                 tolerance,
             )
@@ -553,12 +594,16 @@ def test_peptide_protein_complex(tmp_path):
         Correct_E_solute = 0 * unit.kilojoule_per_mole
         for i in forces_rest2_new:
             force = forces_rest2_new[i]
-            if i in [4,5]:
+            if i in [4, 5]:
                 Correct_E_solute += force["energy"]
 
         for i in solute_force_new:
             force = solute_force_new[i]
-            if force["name"] in ["HarmonicBondForce", "HarmonicAngleForce", "NonbondedForce"]:
+            if force["name"] in [
+                "HarmonicBondForce",
+                "HarmonicAngleForce",
+                "NonbondedForce",
+            ]:
                 Correct_E_solute += force["energy"]
 
         assert (
@@ -592,11 +637,7 @@ def test_peptide_protein_complex(tmp_path):
                 break
         assert (
             pytest.approx(
-                (
-                    rest2_nonbonded_new
-                    - solute_nonbonded_new
-                    - solvent_nonbonded_new
-                )
+                (rest2_nonbonded_new - solute_nonbonded_new - solvent_nonbonded_new)
                 / (scale**0.5 * solvent_solute_nb_new),
                 tolerance,
             )
@@ -604,13 +645,11 @@ def test_peptide_protein_complex(tmp_path):
         )
 
 
-
 def test_5awl_omega_PRO(tmp_path):
     """Test peptide protein complex"""
 
     tolerance = 0.00001
 
- 
     name = "5awl"
     OUT_PATH = tmp_path
 
@@ -690,7 +729,6 @@ def test_5awl_omega_PRO(tmp_path):
             assert force.getNumTorsions() == torsion_len[force_i]
             force_i += 1
 
-
     integrator_2 = openmm.LangevinMiddleIntegrator(temperature, friction, dt)
 
     test_2 = rest2.REST2(
@@ -706,9 +744,11 @@ def test_5awl_omega_PRO(tmp_path):
     assert test_2.system.getNumForces() == 9
     assert test_2.solute_index == solute_indices
     assert len(test_2.solute_index) == 166
-    assert len(test_2.solvent_index) ==  pytest.approx(4000, abs=2000)
+    assert len(test_2.solvent_index) == pytest.approx(4000, abs=2000)
     assert test_2.scale == 1.0
-    assert len(test_2.init_nb_param) == len(test_2.solute_index) + len(test_2.solvent_index)
+    assert len(test_2.init_nb_param) == len(test_2.solute_index) + len(
+        test_2.solvent_index
+    )
     assert len(test_2.init_nb_exept_index) == 899
     assert len(test_2.init_nb_exept_value) == 899
     assert len(test_2.init_nb_exept_solute_value) == 899
@@ -716,11 +756,10 @@ def test_5awl_omega_PRO(tmp_path):
     assert len(test_2.init_torsions_value) == 521 - 4
     assert test_2.solute_torsion_force.getNumTorsions() == 521 - 4
 
-    torsion_len = [521-4, 46+4, 0]
+    torsion_len = [521 - 4, 46 + 4, 0]
     force_i = 0
 
     for force in test_2.system.getForces():
         if isinstance(force, openmm.CustomTorsionForce):
             assert force.getNumTorsions() == torsion_len[force_i]
             force_i += 1
-

@@ -1,6 +1,10 @@
 #!/usr/bin/env python3
 # coding: utf-8
 
+# To use typing annotations from future Python versions
+# Can be removed when minimum Python version is 3.9+
+from __future__ import annotations
+
 """
 OpenMM topology transformations
 ===============================
@@ -109,7 +113,6 @@ def _is_topology_object(obj: Any):
         Boolean value indicating whether `obj` is a topology item.
     """
     return isinstance(obj, (app.Atom, app.topology.Bond, app.Residue, app.Chain))
-
 
 
 def get_subset(
