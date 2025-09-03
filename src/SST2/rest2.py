@@ -865,17 +865,21 @@ class REST2:
                 print(f'Found HarmonicBondForce {harmonic_bond_force.getNumBonds()}')
                 break
 
+        remove_num = 0
         for bond_index in range(harmonic_bond_force.getNumBonds()):
             p1, p2, l, k = harmonic_bond_force.getBondParameters(
                 bond_index
             )
             if p1 not in self.solute_index and p2 not in self.solute_index:
                 harmonic_bond_force.setBondParameters(bond_index, p1, p2, l, 0.0 * k.unit)
+                remove_num += 1
                 # print(f"Remove {p1}-{p2}")
             elif p1 in self.solute_index and p2 not in self.solute_index:
                 logger.error(f"Bond between solute and solvent detected {p1}-{p2}")
             elif p1 not in self.solute_index and p2 in self.solute_index:
                 logger.error(f"Bond between solute and solvent detected {p1}-{p2}")
+        logger.info(f"   - Remove {remove_num} bonds from HarmonicBondForce")
+
 
         logger.info(" - Remove HarmonicAngleForce element which does not concern solute")
         for count, force in enumerate(self.system_rf.getForces()):
@@ -884,12 +888,14 @@ class REST2:
                 print('Found HarmonicAngleForce')
                 break
         
+        remove_num = 0
         for angle_index in range(harmonic_angle_force.getNumAngles()):
             p1, p2, p3, angle, k = harmonic_angle_force.getAngleParameters(
-                bond_index
+                angle_index
             )
             if p1 not in self.solute_index and p2 not in self.solute_index and p3 not in self.solute_index:
                 harmonic_angle_force.setAngleParameters(angle_index, p1, p2, p3, angle, 0.0 * k.unit)
+                remove_num += 1
                 # print(f"Remove {p1}-{p2}-{p3}")
             elif p1 in self.solute_index and (p2 not in self.solute_index or p3 not in self.solute_index):
                 logger.error(f"Bond between solute and solvent detected {p1}-{p2}-{p3}")
@@ -897,7 +903,7 @@ class REST2:
                 logger.error(f"Bond between solute and solvent detected {p1}-{p2}-{p3}")
             elif p3 in self.solute_index and (p1 not in self.solute_index or p2 not in self.solute_index):
                 logger.error(f"Bond between solute and solvent detected {p1}-{p2}-{p3}")
-
+        logger.info(f"   - Remove {remove_num} angles from HarmonicAngleForce")
 
         # Create the simulation
         self.simulation_rf = setup_simulation(
