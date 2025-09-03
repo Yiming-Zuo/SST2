@@ -326,6 +326,10 @@ class REST2:
                 friction=friction,
                 dt=dt,
             )
+            logger.info("- Reaction Field object forces:")
+            print_forces(self.system_rf, self.simulation_rf)
+
+
         else:
             raise ValueError("nonbondedMethod not supported")
 
