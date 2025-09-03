@@ -722,14 +722,16 @@ def create_custom_bonded_force_rf(
     custom_bond_force.addPerBondParameter("sigma")
     custom_bond_force.addPerBondParameter("epsilon")
 
+    bond_init_param = []
     for index in range(original_nonbonded_force.getNumExceptions()):
         j, k, chargeprod, sigma, epsilon = (
             original_nonbonded_force.getExceptionParameters(index)
         )
         if j in atom_index[0] and k in atom_index[1]:
             custom_bond_force.addBond(j, k, [chargeprod, sigma, epsilon])
+            bond_init_param.append((j, k, chargeprod, sigma, epsilon))
 
-    return custom_bond_force
+    return custom_bond_force, bond_init_param
 
 
 def print_forces(system, simulation):

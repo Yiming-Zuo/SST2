@@ -303,6 +303,8 @@ class REST2:
                 friction=friction,
                 dt=dt,
             )
+            self.find_nb_solute_system()
+
 
         elif nonbondedMethod == app.CutoffPeriodic:
             # To avoid issues with charged solute and PME,
@@ -328,7 +330,6 @@ class REST2:
             raise ValueError("nonbondedMethod not supported")
 
         # Extract solute nonbonded index and values from the solute_only system
-        self.find_nb_solute_system()
         self.setup_simulation(
             integrator,
             temperature=temperature,
@@ -336,6 +337,10 @@ class REST2:
             barostatInterval=barostatInterval,
             platform_name=platform_name,
         )
+
+        logger.info("- REST2 object forces:")
+        print_forces(self.system, self.simulation)
+
 
     def find_solute_nb_index(self):
         """Extract initial solute nonbonded indexes and values (charge, sigma, epsilon).
@@ -768,7 +773,6 @@ class REST2:
             hydrogenMass=hydrogenMass,
         )
 
-
         for force in self.system_rf.getForces():
             if isinstance(force, openmm.NonbondedForce):
                 original_nonbonded_force = force
@@ -798,12 +802,15 @@ class REST2:
         )
         custom_nonbonded_force_pp.setForceGroup(7)
         custom_nonbonded_force_pp.setName("Nonbonded_pp")
+        self.nonbonded_pp_rf_force = custom_nonbonded_force_pp
 
-        custom_bonded_force_pp = create_custom_bonded_force_rf(
+        custom_bonded_force_pp, self.bond_rf_param_pp = create_custom_bonded_force_rf(
             original_nonbonded_force, [self.solute_index, self.solute_index]
         )
+        logger.info(f"- Bonded rf parameter pp num: {len(self.bond_rf_param_pp)}")
         custom_bonded_force_pp.setForceGroup(8)
         custom_bonded_force_pp.setName("Bonded_pp")
+        self.bonded_pp_rf_force = custom_bonded_force_pp
 
         self.system_rf.addForce(custom_nonbonded_force_pp)
         self.system_rf.addForce(custom_bonded_force_pp)
@@ -815,27 +822,87 @@ class REST2:
         )
         custom_nonbonded_force_wp.setForceGroup(9)
         custom_nonbonded_force_wp.setName("Nonbonded_wp")
+        self.nonbonded_wp_rf_force = custom_nonbonded_force_wp
 
-        custom_bonded_force_wp = create_custom_bonded_force_rf(
+        custom_bonded_force_wp, self.bond_rf_param_wp = create_custom_bonded_force_rf(
             original_nonbonded_force, [self.solvent_index, self.solute_index]
         )
+        logger.info(f"- Bonded rf parameter wp num: {len(self.bond_rf_param_wp)}")
         custom_bonded_force_wp.setForceGroup(10)
         custom_bonded_force_wp.setName("Bonded_wp")
+        self.bonded_wp_rf_force = custom_bonded_force_wp
 
         self.system_rf.addForce(custom_nonbonded_force_wp)
         self.system_rf.addForce(custom_bonded_force_wp)
 
-        # logger.info("- Delete the original NonbondedForce.")
-        # for count, force in enumerate(self.system_rf.getForces()):
-        #     if isinstance(force, openmm.NonbondedForce):
-        #         self.system_rf.removeForce(count)
-        #         break
+        
+        logger.info("- Delete the original NonbondedForce.")
+        for count, force in enumerate(self.system_rf.getForces()):
+            if isinstance(force, openmm.NonbondedForce):
+                self.system_rf.removeForce(count)
+                break
+
+        logger.info("- Delete PeriodicTorsionForce.")
+        for count, force in enumerate(self.system_rf.getForces()):
+            if isinstance(force, openmm.PeriodicTorsionForce):
+                self.system_rf.removeForce(count)
+                break
+
+        logger.info("- Delete CMMotionRemover.")
+        for count, force in enumerate(self.system_rf.getForces()):
+            if isinstance(force, openmm.CMMotionRemover):
+                self.system_rf.removeForce(count)
+                break
+
+        logger.info(" - Remove HarmonicBondForce element which does not concern solute")
+        for count, force in enumerate(self.system_rf.getForces()):
+            if isinstance(force, openmm.HarmonicBondForce):
+                harmonic_bond_force = force
+                print(f'Found HarmonicBondForce {harmonic_bond_force.getNumBonds()}')
+                break
+
+        for bond_index in range(harmonic_bond_force.getNumBonds()):
+            p1, p2, l, k = harmonic_bond_force.getBondParameters(
+                bond_index
+            )
+            if p1 not in self.solute_index and p2 not in self.solute_index:
+                harmonic_bond_force.setBondParameters(bond_index, p1, p2, l, 0.0 * k.unit)
+                # print(f"Remove {p1}-{p2}")
+            elif p1 in self.solute_index and p2 not in self.solute_index:
+                logger.error(f"Bond between solute and solvent detected {p1}-{p2}")
+            elif p1 not in self.solute_index and p2 in self.solute_index:
+                logger.error(f"Bond between solute and solvent detected {p1}-{p2}")
+
+        logger.info(" - Remove HarmonicAngleForce element which does not concern solute")
+        for count, force in enumerate(self.system_rf.getForces()):
+            if isinstance(force, openmm.HarmonicAngleForce):
+                harmonic_angle_force = force
+                print('Found HarmonicAngleForce')
+                break
+        
+        for angle_index in range(harmonic_angle_force.getNumAngles()):
+            p1, p2, p3, angle, k = harmonic_angle_force.getAngleParameters(
+                bond_index
+            )
+            if p1 not in self.solute_index and p2 not in self.solute_index and p3 not in self.solute_index:
+                harmonic_angle_force.setAngleParameters(angle_index, p1, p2, p3, angle, 0.0 * k.unit)
+                # print(f"Remove {p1}-{p2}-{p3}")
+            elif p1 in self.solute_index and (p2 not in self.solute_index or p3 not in self.solute_index):
+                logger.error(f"Bond between solute and solvent detected {p1}-{p2}-{p3}")
+            elif p2 in self.solute_index and (p1 not in self.solute_index or p3 not in self.solute_index):
+                logger.error(f"Bond between solute and solvent detected {p1}-{p2}-{p3}")
+            elif p3 in self.solute_index and (p1 not in self.solute_index or p2 not in self.solute_index):
+                logger.error(f"Bond between solute and solvent detected {p1}-{p2}-{p3}")
+
 
         # Create the simulation
         self.simulation_rf = setup_simulation(
             self.system_rf, pdb.positions, pdb.topology, integrator, platform_name
         )
-
+        # harmonic_bond_force.updateParametersInContext(self.simulation_rf.context)   
+        # harmonic_angle_force.updateParametersInContext(self.simulation_rf.context)
+        # print("Reaction Field Forces")
+        # print_forces(self.system_rf, self.simulation_rf)
 
         
 
@@ -884,10 +951,7 @@ class REST2:
         Exception values are stored as indexes [iatom, jatom] are different.
         """
 
-        if self.reaction_field:
-            nonbonded_force = self.system_forces_rf["NonbondedForce"]
-        else:
-            nonbonded_force = self.system_forces_solute["NonbondedForce"]
+        nonbonded_force = self.system_forces_solute["NonbondedForce"]
 
         # Copy particles
         self.init_nb_exept_solute_value = []
@@ -1059,53 +1123,37 @@ class REST2:
         - charge product is scaled by `scale`
         """
 
-        # print_forces(self.system_all, self.simulation_all)
-
-        nonbonded_force = self.system_forces_rf["NonbondedForce"]
-
-        # for i in self.solute_index:
-        #     q, sigma, eps = self.init_nb_param[i]
-        #     nonbonded_force.setParticleParameters(
-        #         i, q * np.sqrt(scale), sigma, eps * scale
-        #     )
-
-        # for i in range(len(self.init_nb_exept_index)):
-        #     index = self.init_nb_exept_index[i]
-        #     p1, p2, q, sigma, eps = self.init_nb_exept_value[i]
-        #     # In ExceptionParameters, q is the charge product.
-        #     # To scale particle charges by `np.sqrt(scale)`
-        #     # is equivalent to scale the product by `scale`
-        #     # As for eps, eps(i,j) = sqrt(eps(i)*eps(j))
-        #     # if we scale eps(i) and eps(j) by `scale`
-        #     # we aslo scale eps(i,j) by `scale`.
-        #     nonbonded_force.setExceptionParameters(
-        #         index, p1, p2, q * scale, sigma, eps * scale
-        #     )
-
-        # # Need to fix simulation
-        # nonbonded_force.updateParametersInContext(self.simulation_all.context)
-
-        
         for i in self.solute_index:
             q, sigma, eps = self.init_nb_param[i]
-            nonbonded_force.setParticleParameters(
-                i, q * np.sqrt(scale), sigma, eps * scale
+            self.nonbonded_pp_rf_force.setParticleParameters(
+                i, [q * np.sqrt(scale), sigma, eps * scale]
             )
+            self.nonbonded_wp_rf_force.setParticleParameters(
+                i, [q * np.sqrt(scale), sigma, eps * scale]
+            )
+        self.nonbonded_pp_rf_force.updateParametersInContext(self.simulation_rf.context)
+        self.nonbonded_wp_rf_force.updateParametersInContext(self.simulation_rf.context)
 
-        # for i in self.solute_index:
-        #     p1, p2, q, sigma, eps = self.init_nb_exept_value[i]
-        #     # In ExceptionParameters, q is the charge product.
-        #     # To scale particle charges by `np.sqrt(scale)`
-        #     # is equivalent to scale the product by `scale`
-        #     # As for eps, eps(i,j) = sqrt(eps(i)*eps(j))
-        #     # if we scale eps(i) and eps(j) by `scale`
-        #     # we aslo scale eps(i,j) by `scale`.
-        #     nonbonded_force.setExceptionParameters(
-        #         index, p1, p2, q * scale, sigma, eps * scale
-        #     )
+    def update_bonded_reaction_field(self, scale):
+        """Scale system bonded interaction:
+        - LJ epsilon by `scale`
+        - Coulomb charges by `sqrt(scale)`
+        - charge product is scaled by `scale`
+        """
 
-        # Need to fix simulation
-        nonbonded_force.updateParametersInContext(self.simulation_rf.context)
+        for i in range(len(self.bond_rf_param_pp)):
+            p1, p2, q, sigma, eps = self.bond_rf_param_pp[i]
+            self.bonded_pp_rf_force.setBondParameters(
+                 i, p1, p2, [q * scale, sigma, eps * scale])
+        self.bonded_pp_rf_force.updateParametersInContext(self.simulation_rf.context)
+        
+        if len(self.bond_rf_param_wp) > 0:
+            for i in range(len(self.bond_rf_param_wp)):
+                p1, p2, q, sigma, eps = self.bond_rf_param_wp[i]
+                self.bonded_wp_rf_force.setBondParameters(
+                    i, p1, p2, [q * np.sqrt(scale), sigma, eps * scale])
+            
+            self.bonded_wp_rf_force.updateParametersInContext(self.simulation_rf.context)
 
     def update_nonbonded_solute(self, scale):
         """Scale solute only system nonbonded interaction:
@@ -1173,6 +1221,7 @@ class REST2:
         self.update_nonbonded(scale)
         if self.reaction_field:
             self.update_nonbonded_reaction_field(scale)
+            self.update_bonded_reaction_field(scale)
         else:
             self.update_nonbonded_solute(scale)
         self.update_torsions(scale)
@@ -1188,6 +1237,8 @@ class REST2:
 
         if self.reaction_field:
 
+            E_solute_not_scaled = 0 * unit.kilojoules_per_mole
+
             _, rf_force, system_force = (
                 self.compute_solute_solvent_system_energy()
             )
@@ -1200,16 +1251,26 @@ class REST2:
                     nonbonded_rf_pp = force["energy"]
                 elif force["name"] == "Bonded_pp":
                     bonded_rf_pp = force["energy"]
+                elif force["name"] in ["HarmonicBondForce", "HarmonicAngleForce"]:
+                    E_solute_not_scaled += force["energy"]
             
             E_solute_scaled = 0 * unit.kilojoules_per_mole
             E_solute_scaled += nonbonded_rf_pp + bonded_rf_pp
 
+            solute_torsion_scaled_flag = True
+            solute_torsion_not_scaled_flag = True
 
             for i, force in system_force.items():
                 # Only the first CustomTorsionForce is the scaled solute one
-                if force["name"] == "CustomTorsionForce":
+                if force["name"] == "CustomTorsionForce" and solute_torsion_scaled_flag:
                     # print(f"Add {force['name']} energy to E_solute_scaled = {force['energy']}")
                     E_solute_scaled += force["energy"]
+                    solute_torsion_scaled_flag = False
+                elif (
+                    force["name"] == "CustomTorsionForce" and solute_torsion_not_scaled_flag
+                ):
+                    E_solute_not_scaled += force["energy"]
+                    solute_torsion_not_scaled_flag = False
                     break
 
             solvent_solute_nb = nonbonded_rf_wp + bonded_rf_wp  
@@ -1219,7 +1280,7 @@ class REST2:
 
             return (
                 (1 / self.scale) * E_solute_scaled,
-                0 * unit.kilojoules_per_mole, # Not computed here
+                E_solute_not_scaled,
                 0 * unit.kilojoules_per_mole, # Not computed here
                 (1 / self.scale) ** 0.5 * solvent_solute_nb,
             )
