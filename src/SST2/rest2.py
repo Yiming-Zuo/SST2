@@ -782,23 +782,6 @@ class REST2:
                 original_nonbonded_force = force
                 break
 
-        # Solvent Solvent interactions
-        # custom_nonbonded_force_ww = create_custom_nonbonded_force_rf(
-        #     original_nonbonded_force, [[self.solvent_index, self.solvent_index]]
-        # )
-        # custom_nonbonded_force_ww.setForceGroup(5)
-        # custom_nonbonded_force_ww.setName("Nonbonded_ww")
-
-        # custom_bonded_force_ww = create_custom_bonded_force_rf(
-        #     original_nonbonded_force, [self.solvent_index, self.solvent_index]
-        # )
-        # custom_bonded_force_ww.setForceGroup(6)
-        # custom_bonded_force_ww.setName("Bonded_ww")
-
-        # # Add the custom forces to the system
-        # self.system_rf.addForce(custom_nonbonded_force_ww)
-        # self.system_rf.addForce(custom_bonded_force_ww)
-
         # Solute Solute
 
         custom_nonbonded_force_pp = create_custom_nonbonded_force_rf(
@@ -862,7 +845,6 @@ class REST2:
         for count, force in enumerate(self.system_rf.getForces()):
             if isinstance(force, openmm.HarmonicBondForce):
                 harmonic_bond_force = force
-                print(f'Found HarmonicBondForce {harmonic_bond_force.getNumBonds()}')
                 break
 
         remove_num = 0
@@ -885,7 +867,6 @@ class REST2:
         for count, force in enumerate(self.system_rf.getForces()):
             if isinstance(force, openmm.HarmonicAngleForce):
                 harmonic_angle_force = force
-                print('Found HarmonicAngleForce')
                 break
         
         remove_num = 0
@@ -908,45 +889,12 @@ class REST2:
         # Create the simulation
         self.simulation_rf = setup_simulation(
             self.system_rf, pdb.positions, pdb.topology, integrator, platform_name
-        )
-        # harmonic_bond_force.updateParametersInContext(self.simulation_rf.context)   
-        # harmonic_angle_force.updateParametersInContext(self.simulation_rf.context)
-        # print("Reaction Field Forces")
-        # print_forces(self.system_rf, self.simulation_rf)
-
-        
+        )  
 
         self.system_forces_rf = {
             type(force).__name__: force for force in self.system_rf.getForces()
         }
         
-
-        # Need to use the get_subset function because of small molecule issue related
-        # solute_stdout = StringIO()
-        # solute_top, solute_pos = get_subset(
-        #     self.topology, self.positions, keep=self.solute_index, types="atom"
-        # )
-
-        # app.PDBFile.writeFile(solute_top, solute_pos, solute_stdout, True)
-
-        # self.system_solute, self.simulation_solute = create_system_simulation(
-        #     StringIO(solute_stdout.getvalue()),
-        #     cif_format=False,
-        #     forcefield=forcefield,
-        #     nonbondedMethod=nonbondedMethod,
-        #     nonbondedCutoff=nonbondedCutoff,
-        #     constraints=constraints,
-        #     platform_name=platform_name,
-        #     rigidWater=rigidWater,
-        #     ewaldErrorTolerance=ewaldErrorTolerance,
-        #     hydrogenMass=hydrogenMass,
-        #     friction=friction,
-        #     dt=dt,
-        # )
-        # self.system_forces_solute = {
-        #     type(force).__name__: force for force in self.system_solute.getForces()
-        # }
-
         sys.stdout = old_stdout
 
 
@@ -1029,7 +977,12 @@ class REST2:
             Forces on solvent
         """
 
-        sim_state = self.simulation.context.getState(getPositions=True, getEnergy=True)
+        sim_state = self.simulation.context.getState(
+            getPositions=True,
+            getEnergy=False,
+            getVelocities=False,
+            getForces=False,
+            getParameters=False,)
 
         tot_positions = sim_state.getPositions(asNumpy=True)
         box_vector = sim_state.getPeriodicBoxVectors()
@@ -1155,6 +1108,7 @@ class REST2:
             p1, p2, q, sigma, eps = self.bond_rf_param_pp[i]
             self.bonded_pp_rf_force.setBondParameters(
                  i, p1, p2, [q * scale, sigma, eps * scale])
+        
         self.bonded_pp_rf_force.updateParametersInContext(self.simulation_rf.context)
         
         if len(self.bond_rf_param_wp) > 0:

@@ -976,11 +976,18 @@ def compute_ladder_num(generic_name, min_temp, max_temp, sst2_score=False):
     else:
         E_pot = df_sim["Potential Energy (kJ/mole)"].mean()
 
+    if E_pot > 0:
+        logger.warning(
+            f"Average potential energy is positive ({E_pot:.2e} KJ.mol-1). "
+            "The number of replicas cannot be estimated. "
+            "Set it manually."
+        )
+        return 1
+
     logger.info(f"Average Epot = {E_pot:.2e} KJ.mol-1")
     # TO CHECK
     E_pot *= 8.314462618e-3
     logger.info(f"Average Epot = {E_pot:.2e} Kb")
-
     N_Nadler = 1 + 0.594 * np.sqrt(-E_pot) * np.log(max_temp / min_temp)
     logger.info(f"Nadler and Hansmann N = {N_Nadler:.2f}")
     N_Denshlag = 1 + (np.sqrt(-E_pot) / (2 * 0.534) - 0.5) * np.log(max_temp / min_temp)

@@ -227,9 +227,8 @@ if __name__ == "__main__":
         logger.error(f"System is not neutral, charge = {tot_charge:.2f}. Please check the input structure.")
 
     if abs(solute_charge) > 0.01 and args.nonbonded_PME:
-        logger.error(f"Solute is charged, charge = {solute_charge:.2f}."
-                     f"Using PME for nonbonded interactions is not recommended.\n"
-                     f"Remove the -nonbonded_PME flag with charge solute.\n")
+        logger.warning(f"Solute is charged, charge = {solute_charge:.2f}."
+                     f"Using PME for nonbonded interactions might introduce artifacts.\n")
 
     if abs(solute_charge) < 0.01 and not args.nonbonded_PME:
         logger.warning(f"Solute is not charged, charge = {solute_charge:.2f}."
