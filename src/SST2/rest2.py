@@ -264,6 +264,25 @@ class REST2:
         self.system_forces = {
             type(force).__name__: force for force in self.system.getForces()
         }
+
+        solute_charge = 0 * unit.elementary_charge
+        solvent_charge = 0 * unit.elementary_charge
+        nonbonded = self.system_forces["NonbondedForce"]
+        for i in self.solute_index:
+            charge, _, _ = nonbonded.getParticleParameters(i)
+            solute_charge += charge
+        for i in self.solvent_index:
+            charge, _, _ = nonbonded.getParticleParameters(i)
+            solvent_charge += charge
+
+        logger.info(f"- Solute total charge : {solute_charge._value:.2f}")
+        logger.info(f"- Solvent total charge: {solvent_charge._value:.2f}")
+
+        if abs(solute_charge._value + solvent_charge._value) > 0.01:
+            logger.error(f"System is not neutral, charge = {solute_charge._value + solvent_charge._value:.2f}. Please check the input structure.")
+
+        self.solute_charge = solute_charge
+        self.solvent_charge = solvent_charge
         self.scale = 1.0
 
         self.CMAP_flag = False
@@ -290,6 +309,22 @@ class REST2:
         if nonbondedMethod == app.PME:
             logger.info("Create systems with PME")
             self.reaction_field = False
+
+            # Extract alpha parameters form PME NonbondedForce
+            self.alpha_ewald = self.system_forces["NonbondedForce"].getPMEParameters()[0]
+            if self.alpha_ewald == 0.0 * unit.nanometers**-1:
+                logger.warning(
+                    "Warning: alpha parameter of PME is 0.0, "
+                    "alpha chosen based on the Ewald error tolerance"
+                )
+                tolerance = self.system_forces["NonbondedForce"].getEwaldErrorTolerance()
+                cutoff = self.system_forces["NonbondedForce"].getCutoffDistance()
+                logger.info(f"- Ewald error tolerance: {tolerance}")
+                logger.info(f"- PME cutoff: {cutoff}")
+
+                self.alpha_ewald = (np.sqrt(-np.log(tolerance)) / cutoff).in_units_of(unit.nanometers**-1)
+
+            logger.info(f"- PME alpha: {self.alpha_ewald}")
 
             self.create_solute_solvent_simulation(
                 forcefield=forcefield,
@@ -983,6 +1018,12 @@ class REST2:
             getVelocities=False,
             getForces=False,
             getParameters=False,)
+
+        volume = sim_state.getPeriodicBoxVolume()
+
+        pme_correct = - np.pi * (self.solute_charge * self.scale) ** 2 / (2 * self.alpha_ewald ** 2 * volume)
+
+        print(f"Volume: {volume}, pme_correct: {pme_correct}")
 
         tot_positions = sim_state.getPositions(asNumpy=True)
         box_vector = sim_state.getPeriodicBoxVectors()

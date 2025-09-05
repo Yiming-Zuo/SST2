@@ -487,13 +487,12 @@ def create_system_simulation(
     return system, simulation
 
 
-def create_sim_system(cif, forcefield, temp=300.0, h_mass=1.5, base_force_group=1):
+def create_sim_system(cif, forcefield, temp=300.0, h_mass=1.5, base_force_group=1, rigidWater = True, constraints = app.HBonds):
     # System Configuration
 
     nonbondedMethod = app.PME
     ewaldErrorTolerance = 0.0005
-    constraints = app.HBonds
-    rigidWater = True
+    
 
     if unit.is_quantity(h_mass):
         hydrogenMass = h_mass.in_units_of(unit.amu)

@@ -56,7 +56,7 @@ def parser_input():
     parser.add_argument('-time',
                         action="store",
                         dest="time",
-                        help='SST2 time, default=10.000 (ns)',
+                        help='SST2 time, default= 10 000 (ns)',
                         type=float,
                         default=10000)
     parser.add_argument('-temp_list',
@@ -118,10 +118,10 @@ def parser_input():
                         action="store_true",
                         dest="exclude_Pro_omega",
                         help='Exclude Proline omega dihedral scale angles')
-    parser.add_argument('-nonbonded_PME',
+    parser.add_argument('-nonbonded_RF',
                         action="store_true",
-                        dest="nonbonded_PME",
-                        help='Use Particle Mesh Ewald for nonbonded interactions')
+                        dest="nonbonded_RF",
+                        help='Use Reaction Field to compute the electrostatic part of nonbonded interactions')
     parser.add_argument('-ff',
                         action="store",
                         dest="ff",
@@ -276,16 +276,16 @@ if __name__ == "__main__":
     if abs(tot_charge) > 0.01:
         logger.error(f"System is not neutral, charge = {tot_charge:.2f}. Please check the input structure.")
 
-    if abs(solute_charge) > 0.01 and args.nonbonded_PME:
+    if abs(solute_charge) > 0.01 and not args.nonbonded_RF:
         logger.warning(f"Solute is charged, charge = {solute_charge:.2f}."
                      f"Using PME for nonbonded interactions might introduce artifacts.\n")
 
-    if abs(solute_charge) < 0.01 and not args.nonbonded_PME:
+    if abs(solute_charge) < 0.01 and args.nonbonded_RF:
         logger.warning(f"Solute is not charged, charge = {solute_charge:.2f}."
                        f"Using PME for nonbonded interactions is recommended.\n"
                        f"Add the -nonbonded_PME flag with charge solute.\n")
 
-    if args.nonbonded_PME:
+    if not args.nonbonded_RF:
         logger.info("Using PME for nonbonded interactions")
         nonbondedMethod = app.PME
     else:

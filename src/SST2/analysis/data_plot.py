@@ -1210,8 +1210,8 @@ def recompute_temp(df, ref_temp=300.0):
     for i, temp in enumerate(temp_list_traj):
         local_df = df[df["Aim Temp (K)"] == temp]
         # Epw
-        Epp = local_df["E solute scaled (kJ/mole)"].mean()
-        Epw = local_df["E solvent-solute (kJ/mole)"].mean()
+        Epp = abs(local_df["E solute scaled (kJ/mole)"].mean())
+        Epw = abs(local_df["E solvent-solute (kJ/mole)"].mean())
 
         new_Bi = inverseTemperatures[i] * (
             1
