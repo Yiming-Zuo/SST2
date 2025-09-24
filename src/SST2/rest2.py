@@ -342,10 +342,7 @@ class REST2:
 
 
         elif nonbondedMethod == app.CutoffPeriodic:
-            # To avoid issues with charged solute and PME,
-            # we create a copy of the system with CutoffPeriodic for electrostatics
-            # and compute the solute-solvent interactions with this system
-            # with Reaction Field
+
             logger.info("Create systems with Reaction Field")
             self.reaction_field = True
 
@@ -1019,11 +1016,11 @@ class REST2:
             getForces=False,
             getParameters=False,)
 
-        volume = sim_state.getPeriodicBoxVolume()
+        # volume = sim_state.getPeriodicBoxVolume()
 
-        pme_correct = - np.pi * (self.solute_charge * self.scale) ** 2 / (2 * self.alpha_ewald ** 2 * volume)
+        # pme_correct = - np.pi * (self.solute_charge * self.scale) ** 2 / (2 * self.alpha_ewald ** 2 * volume)
 
-        print(f"Volume: {volume}, pme_correct: {pme_correct}")
+        # print(f"Volume: {volume}, pme_correct: {pme_correct.value_in_unit(unit.kilojoules_per_mole)} kJ/mol")
 
         tot_positions = sim_state.getPositions(asNumpy=True)
         box_vector = sim_state.getPeriodicBoxVectors()

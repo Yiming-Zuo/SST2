@@ -228,7 +228,9 @@ if __name__ == "__main__":
 
     if abs(solute_charge) > 0.01 and not args.nonbonded_RF:
         logger.warning(f"Solute is charged, charge = {solute_charge:.2f}."
-                     f"Using PME for nonbonded interactions might introduce artifacts.\n")
+                       f"Checked that your version of openmm is equal or above"
+                       f"8.3.1, otherwise be aware that the PME method might introduce artifacts in energy calculations.\n")
+
 
     if abs(solute_charge) < 0.01 and args.nonbonded_RF:
         logger.warning(f"Solute is not charged, charge = {solute_charge:.2f}."
