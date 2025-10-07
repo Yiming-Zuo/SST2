@@ -297,8 +297,8 @@ def implicit_sim(
 
 
 def create_water_box(
-    in_cif,
-    out_cif,
+    in_file,
+    out_file,
     forcefield,
     pad=None,
     vec=None,
@@ -311,10 +311,10 @@ def create_water_box(
 
     Parameters
     ----------
-    in_cif : str
-        Path to the input cif file
-    out_cif : str
-        Path to the output cif file
+    in_file : str
+        Path to the input cif/pdb file
+    out_file : str
+        Path to the output cif/pdb file
     forcefield : openmm ForceField
         forcefield object
     pad : float
@@ -348,11 +348,19 @@ def create_water_box(
         if vec is not None:
             vec = vec * unit.nanometer
 
-    cif = app.PDBxFile(in_cif)
+    if in_file.lower().endswith(".pdb"):
+        cif = app.PDBFile(in_file)
+    elif in_file.lower().endswith(".cif") or in_file.lower().endswith(".mmcif"):
+        cif = app.PDBxFile(in_file)
+    else:
+        raise ValueError("Input file must be a pdb or cif file")
 
-    if not overwrite and os.path.isfile(out_cif):
-        logger.info(f"File {out_cif} exists already, skip create_water_box() step")
-        cif = app.PDBxFile(out_cif)
+    if not overwrite and os.path.isfile(out_file):
+        logger.info(f"File {out_file} exists already, skip create_water_box() step")
+        if out_file.lower().endswith(".pdb"):
+            cif = app.PDBFile(out_file)
+        else:
+            cif = app.PDBxFile(out_file)
         return cif
 
     # To avoid issue with clash with residues out of the box:
@@ -401,11 +409,22 @@ def create_water_box(
         negativeIon=negativeIon,
     )
 
-    app.PDBxFile.writeFile(
-        modeller.topology, modeller.positions, open(out_cif, "w"), True
-    )
-    cif = app.PDBxFile(out_cif)
+    # Save
+    if out_file.lower().endswith(".pdb"):
+        app.PDBFile.writeFile(
+            modeller.topology, modeller.positions, open(out_file, "w"), True
+        )
+        cif = app.PDBFile(out_file)
 
+    elif out_file.lower().endswith(".cif") or out_file.lower().endswith(".mmcif"):
+        app.PDBxFile.writeFile(
+            modeller.topology, modeller.positions, open(out_file, "w"), True
+        )
+        cif = app.PDBxFile(out_file)
+
+    else:
+        raise ValueError("Output file must be a pdb or cif file")
+    
     return cif
 
 
