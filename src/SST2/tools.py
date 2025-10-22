@@ -18,7 +18,7 @@ import pdbfixer
 logger = logging.getLogger(__name__)
 
 
-def get_forcefield(forcefield_name, water_model):
+def get_forcefield(forcefield_name, water_model, extra_files=None):
     """Create the forcefield object from the forcefield name.
 
     Parameters
@@ -27,6 +27,8 @@ def get_forcefield(forcefield_name, water_model):
         Name of the forcefield
     water_model : str
         Name of the water forcefield
+    extra_files : list[str] or str, optional
+        Additional XML forcefield files to load (e.g. ligand parameters)
 
     Returns
     -------
@@ -59,6 +61,11 @@ def get_forcefield(forcefield_name, water_model):
                 f"Water Forcefield {water_model} not recognized with {forcefield_name}"
             )
 
+        if extra_files:
+            if isinstance(extra_files, str):
+                forcefield_files.append(extra_files)
+            else:
+                forcefield_files.extend(extra_files)
         return app.ForceField(*forcefield_files)
 
     elif forcefield_name in ["amber99sbildn", "amber99sbnmr"]:
@@ -85,6 +92,11 @@ def get_forcefield(forcefield_name, water_model):
                 f"Water Forcefield {water_model} not recognized with {forcefield_name}"
             )
 
+        if extra_files:
+            if isinstance(extra_files, str):
+                forcefield_files.append(extra_files)
+            else:
+                forcefield_files.extend(extra_files)
         return app.ForceField(*forcefield_files)
 
     elif forcefield_name == "charmm36":
@@ -112,6 +124,11 @@ def get_forcefield(forcefield_name, water_model):
                 f"Water Forcefield {water_model} not recognized with {forcefield_name}"
             )
 
+        if extra_files:
+            if isinstance(extra_files, str):
+                forcefield_files.append(extra_files)
+            else:
+                forcefield_files.extend(extra_files)
         return app.ForceField(*forcefield_files)
 
     else:
@@ -506,10 +523,9 @@ def create_system_simulation(
     return system, simulation
 
 
-def create_sim_system(cif, forcefield, temp=300.0, h_mass=1.5, base_force_group=1, rigidWater = True, constraints = app.HBonds):
+def create_sim_system(cif, forcefield, temp=300.0, h_mass=1.5, base_force_group=1, rigidWater = True, constraints = app.HBonds, nonbondedMethod=app.PME, nonbondedCutoff=1.0*unit.nanometers):
     # System Configuration
 
-    nonbondedMethod = app.PME
     ewaldErrorTolerance = 0.0005
     
 
@@ -518,7 +534,10 @@ def create_sim_system(cif, forcefield, temp=300.0, h_mass=1.5, base_force_group=
     else:
         hydrogenMass = h_mass * unit.amu
 
-    nonbondedCutoff = 1.0 * unit.nanometers
+    if unit.is_quantity(nonbondedCutoff):
+        nonbondedCutoff = nonbondedCutoff.in_units_of(unit.nanometers)
+    else:
+        nonbondedCutoff = nonbondedCutoff * unit.nanometers
 
     # Integration Options
 
