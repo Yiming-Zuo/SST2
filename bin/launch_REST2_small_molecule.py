@@ -186,8 +186,9 @@ def build_arg_parser():
     parser.add_argument(
         "--dt",
         type=float,
-        default=1.0,
-        help="Integration timestep in femtoseconds (default: %(default)s fs).",
+        default=2.0,
+        help="Integration timestep in femtoseconds. With constraints=HBonds, "
+        "2 fs is safe for most small molecules without HMR (default: %(default)s fs).",
     )
     parser.add_argument(
         "--friction",
@@ -198,8 +199,10 @@ def build_arg_parser():
     parser.add_argument(
         "--hmr",
         type=float,
-        default=1.5,
-        help="Hydrogen mass repartitioning (amu) applied during system construction (default: %(default)s amu).",
+        default=1.0,
+        help="Hydrogen mass repartitioning (amu) applied during system construction. "
+        "Use 1.0 to disable (recommended for small molecules), 1.2-1.5 for speed "
+        "(may affect vibrational frequencies and dynamics) (default: %(default)s amu).",
     )
     parser.add_argument(
         "--cutoff",
